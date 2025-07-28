@@ -91,7 +91,7 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
       const DEEPGRAM_API_KEY = "42a574c1a2aa036676d995c0f4e7120c723df1f3"
 
       const deepgramSocket = new WebSocket(
-        `wss://api.deepgram.com/v1/listen?model=nova-2&language=en-US&smart_format=true&interim_results=true`,
+        `wss://api.deepgram.com/v1/listen?model=nova-2&language=en-US&smart_format=true&interim_results=true&encoding=linear16&sample_rate=16000&channels=1`,
         ["token", DEEPGRAM_API_KEY]
       )
 
@@ -101,30 +101,52 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
       }
 
       deepgramSocket.onmessage = (event) => {
-        const data = JSON.parse(event.data)
+        try {
+          const data = JSON.parse(event.data)
 
-        if (data.channel?.alternatives?.[0]?.transcript) {
-          const transcript = data.channel.alternatives[0].transcript
+          if (data.channel?.alternatives?.[0]?.transcript) {
+            const transcript = data.channel.alternatives[0].transcript
 
-          if (data.is_final) {
-            // Process final transcript
-            processUserInput(transcript)
-            setTranscript("")
-          } else {
-            // Update live transcript
-            setTranscript(transcript)
+            if (data.is_final && transcript.trim()) {
+              // Process final transcript
+              console.log("Final transcript:", transcript)
+              processUserInput(transcript)
+              setTranscript("")
+            } else if (transcript.trim()) {
+              // Update live transcript
+              setTranscript(transcript)
+            }
           }
+
+          // Handle any errors from Deepgram
+          if (data.error) {
+            console.error("Deepgram transcription error:", data.error)
+          }
+        } catch (error) {
+          console.error("Error parsing Deepgram response:", error)
         }
       }
 
       deepgramSocket.onerror = (error) => {
-        console.error("Deepgram error:", error)
+        console.error("Deepgram WebSocket error:", error)
         setIsConnected(false)
+        // Try to reconnect after a delay
+        setTimeout(() => {
+          if (deepgramSocketRef.current?.readyState === WebSocket.CLOSED) {
+            initializeDeepgram()
+          }
+        }, 3000)
       }
 
-      deepgramSocket.onclose = () => {
-        console.log("Deepgram connection closed")
+      deepgramSocket.onclose = (event) => {
+        console.log("Deepgram connection closed", event.code, event.reason)
         setIsConnected(false)
+        // Try to reconnect if it wasn't a normal closure
+        if (event.code !== 1000) {
+          setTimeout(() => {
+            initializeDeepgram()
+          }, 3000)
+        }
       }
 
       deepgramSocketRef.current = deepgramSocket
@@ -137,42 +159,125 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        audio: true,
+        audio: {
+          sampleRate: 16000,
+          channelCount: 1,
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
       })
 
+      // Check if the browser supports the required MediaRecorder type
+      let mimeType = "audio/webm;codecs=opus"
+      if (MediaRecorder.isTypeSupported("audio/webm;codecs=pcm")) {
+        mimeType = "audio/webm;codecs=pcm"
+      } else if (MediaRecorder.isTypeSupported("audio/wav")) {
+        mimeType = "audio/wav"
+      }
+
       const mediaRecorder = new MediaRecorder(stream, {
-        mimeType: "audio/webm;codecs=opus",
+        mimeType: mimeType,
       })
 
       mediaRecorderRef.current = mediaRecorder
       audioChunksRef.current = []
 
-      mediaRecorder.ondataavailable = (event) => {
+      mediaRecorder.ondataavailable = async (event) => {
         if (event.data.size > 0) {
           audioChunksRef.current.push(event.data)
 
-          // Send audio data to Deepgram
-          if (deepgramSocketRef.current?.readyState === WebSocket.OPEN) {
-            deepgramSocketRef.current.send(event.data)
+          // Convert audio data for Deepgram if needed
+          try {
+            if (deepgramSocketRef.current?.readyState === WebSocket.OPEN) {
+              // For WebM/Opus, we need to convert to linear PCM
+              if (mimeType.includes("opus") || mimeType.includes("webm")) {
+                // Convert the audio blob to ArrayBuffer and then to linear PCM
+                const arrayBuffer = await event.data.arrayBuffer()
+
+                // Create an audio context for conversion
+                const audioContext = new (window.AudioContext ||
+                  (window as any).webkitAudioContext)({
+                  sampleRate: 16000,
+                })
+
+                try {
+                  const audioBuffer = await audioContext.decodeAudioData(
+                    arrayBuffer
+                  )
+                  const pcmData = audioBuffer.getChannelData(0)
+
+                  // Convert float32 to int16
+                  const int16Array = new Int16Array(pcmData.length)
+                  for (let i = 0; i < pcmData.length; i++) {
+                    int16Array[i] = Math.max(
+                      -32768,
+                      Math.min(32767, pcmData[i] * 32768)
+                    )
+                  }
+
+                  // Send the PCM data to Deepgram
+                  deepgramSocketRef.current.send(int16Array.buffer)
+                } catch (decodeError) {
+                  // If we can't decode, send the original data
+                  console.warn(
+                    "Could not decode audio, sending original data:",
+                    decodeError
+                  )
+                  deepgramSocketRef.current.send(arrayBuffer)
+                }
+              } else {
+                // For other formats, send directly
+                const arrayBuffer = await event.data.arrayBuffer()
+                deepgramSocketRef.current.send(arrayBuffer)
+              }
+            }
+          } catch (error) {
+            console.error("Error processing audio data:", error)
           }
         }
       }
 
-      mediaRecorder.start(100) // Send data every 100ms
+      mediaRecorder.onerror = (event) => {
+        console.error("MediaRecorder error:", event)
+        setIsRecording(false)
+      }
+
+      mediaRecorder.onstart = () => {
+        console.log("MediaRecorder started")
+      }
+
+      mediaRecorder.onstop = () => {
+        console.log("MediaRecorder stopped")
+        stream.getTracks().forEach((track) => track.stop())
+      }
+
+      mediaRecorder.start(250) // Send data every 250ms for better real-time performance
       setIsRecording(true)
+      console.log("Recording started with mime type:", mimeType)
     } catch (error) {
       console.error("Error starting recording:", error)
+      setIsRecording(false)
+      // Show user-friendly error
+      alert(
+        "Could not access microphone. Please check your browser permissions."
+      )
     }
   }
 
   const stopRecording = () => {
-    if (mediaRecorderRef.current) {
+    if (
+      mediaRecorderRef.current &&
+      mediaRecorderRef.current.state !== "inactive"
+    ) {
       mediaRecorderRef.current.stop()
-      mediaRecorderRef.current.stream
-        .getTracks()
-        .forEach((track) => track.stop())
     }
     setIsRecording(false)
+
+    // Send final message to Deepgram to indicate end of audio
+    if (deepgramSocketRef.current?.readyState === WebSocket.OPEN) {
+      deepgramSocketRef.current.send(JSON.stringify({ type: "CloseStream" }))
+    }
   }
 
   const handleTextSubmit = async () => {
@@ -248,9 +353,31 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
     } catch (error) {
       console.error("Error processing user input:", error)
 
-      // Fallback to basic response
-      const fallbackResponse =
+      // Determine appropriate fallback response based on error type
+      let fallbackResponse =
         "I'm sorry, I'm having trouble processing that right now. Could you please try again?"
+
+      if (error instanceof Error) {
+        if (
+          error.message.includes("network") ||
+          error.message.includes("timeout")
+        ) {
+          fallbackResponse =
+            "I'm experiencing connection issues. Please check your internet connection and try again."
+        } else if (
+          error.message.includes("OpenAI") ||
+          error.message.includes("API")
+        ) {
+          fallbackResponse =
+            "I'm having trouble connecting to my AI service. Let me try a basic response while we work on reconnecting."
+        } else if (
+          error.message.includes("audio") ||
+          error.message.includes("speech")
+        ) {
+          fallbackResponse =
+            "I had trouble processing your voice input. Could you try speaking more clearly or switch to text input?"
+        }
+      }
 
       const aiMessage: ConversationMessage = {
         type: "assistant",
@@ -264,7 +391,12 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
         finalConversation.map((msg) => `${msg.type}: ${msg.content}`)
       )
 
-      await speakText(fallbackResponse)
+      // Try to speak the error message, but don't fail if TTS also fails
+      try {
+        await speakText(fallbackResponse)
+      } catch (ttsError) {
+        console.error("TTS also failed:", ttsError)
+      }
     } finally {
       setIsProcessing(false)
     }
@@ -337,8 +469,32 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
     if (isRecording) {
       stopRecording()
     } else {
-      startRecording()
+      // Check connection before starting recording
+      if (!isConnected) {
+        console.log("Attempting to reconnect to Deepgram...")
+        initializeDeepgram()
+        // Wait a moment for connection before trying to record
+        setTimeout(() => {
+          if (isConnected) {
+            startRecording()
+          } else {
+            alert(
+              "Could not connect to speech recognition service. Please check your internet connection and try again."
+            )
+          }
+        }, 2000)
+      } else {
+        startRecording()
+      }
     }
+  }
+
+  const reconnectDeepgram = () => {
+    setIsConnected(false)
+    if (deepgramSocketRef.current) {
+      deepgramSocketRef.current.close()
+    }
+    initializeDeepgram()
   }
 
   const handleFollowUpClick = async (question: string) => {
@@ -394,16 +550,35 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
                 ? "Connected"
                 : "Error"}
             </div>
+
+            {/* Reconnect Button */}
+            {!isConnected && (
+              <button
+                onClick={reconnectDeepgram}
+                className="px-3 py-1 text-sm bg-blue-500 text-white rounded-full hover:bg-blue-600 transition-colors"
+              >
+                Reconnect Speech
+              </button>
+            )}
           </div>
         </div>
 
         {(!isConnected || !openAIConnected) && (
-          <p className="text-sm text-gray-600">
-            {!isConnected && "Connecting to speech recognition service..."}
-            {!openAIConnected && !isConnected && " & "}
-            {!openAIConnected &&
-              "OpenAI service unavailable - using fallback responses."}
-          </p>
+          <div className="space-y-2">
+            <p className="text-sm text-gray-600">
+              {!isConnected &&
+                "⚠️ Speech recognition is disconnected. Click 'Reconnect Speech' to retry."}
+              {!openAIConnected && !isConnected && " "}
+              {!openAIConnected &&
+                "⚠️ AI service is unavailable - using basic responses. This may affect conversation quality."}
+            </p>
+            {(!isConnected || !openAIConnected) && (
+              <div className="text-xs text-gray-500">
+                Tip: You can still use text input while connections are being
+                restored.
+              </div>
+            )}
+          </div>
         )}
       </div>
 
