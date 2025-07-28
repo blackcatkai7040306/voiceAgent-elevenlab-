@@ -20,11 +20,11 @@ import {
   ConversationMessage,
 } from "@/types/voiceAgent"
 import {
-  generateConversationResponse,
-  extractDataFromConversation,
-  generateFollowUpQuestions,
-  testOpenAIConnection,
-} from "@/lib/openai-api"
+  processVoiceInput,
+  convertTextToSpeech,
+  testVoiceConnection,
+  recordAudio,
+} from "@/lib/voice-api"
 
 export const VoiceAgent: React.FC<VoiceAgentProps> = ({
   onDataExtracted,
@@ -32,44 +32,38 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
   isRecording,
   setIsRecording,
 }) => {
-  const [isConnected, setIsConnected] = useState(false)
-  const [transcript, setTranscript] = useState("")
+  const [isConnected, setIsConnected] = useState<boolean | null>(null)
   const [isProcessing, setIsProcessing] = useState(false)
   const [conversation, setConversation] = useState<ConversationMessage[]>([])
   const [isPlaying, setIsPlaying] = useState(false)
-  const [openAIConnected, setOpenAIConnected] = useState<boolean | null>(null)
   const [followUpQuestions, setFollowUpQuestions] = useState<string[]>([])
   const [extractedData, setExtractedData] = useState<ExtractedUserData>({})
   const [textInput, setTextInput] = useState("")
   const [inputMode, setInputMode] = useState<"voice" | "text">("voice")
+  const [currentTranscript, setCurrentTranscript] = useState("")
 
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
-  const audioChunksRef = useRef<Blob[]>([])
-  const deepgramSocketRef = useRef<WebSocket | null>(null)
-  const audioRef = useRef<HTMLAudioElement | null>(null)
+  const audioRecorderRef = useRef<{
+    start: () => void
+    stop: () => Promise<Blob>
+    isRecording: () => boolean
+  } | null>(null)
 
-  // Test OpenAI connection on component mount
+  // Test voice service connection on component mount
   useEffect(() => {
-    async function checkOpenAIConnection() {
-      const connected = await testOpenAIConnection()
-      setOpenAIConnected(connected)
+    async function checkVoiceConnection() {
+      const connected = await testVoiceConnection()
+      setIsConnected(connected)
     }
-    checkOpenAIConnection()
+    checkVoiceConnection()
+
+    // Set up periodic connection checks
+    const interval = setInterval(checkVoiceConnection, 30000) // Check every 30 seconds
+    return () => clearInterval(interval)
   }, [])
 
-  // Initialize Deepgram connection
+  // Send initial greeting when service connects
   useEffect(() => {
-    initializeDeepgram()
-    return () => {
-      if (deepgramSocketRef.current) {
-        deepgramSocketRef.current.close()
-      }
-    }
-  }, [])
-
-  // Send initial greeting when OpenAI connects
-  useEffect(() => {
-    if (openAIConnected && conversation.length === 0) {
+    if (isConnected && conversation.length === 0) {
       const initialGreeting =
         "Hello! I'm your AI financial planning assistant. I'm here to help you plan for your financial future. To get started, I'd love to learn a bit about you - could you tell me about your current situation or financial goals?"
 
@@ -81,195 +75,32 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
 
       setConversation([greetingMessage])
       onConversationUpdate([`assistant: ${initialGreeting}`])
-      speakText(initialGreeting)
+
+      // Convert greeting to speech
+      convertTextToSpeech(initialGreeting).then((success) => {
+        if (success) {
+          setIsPlaying(true)
+          // Note: The voice API handles playing audio automatically
+          setTimeout(() => setIsPlaying(false), 3000) // Estimate duration
+        }
+      })
     }
-  }, [openAIConnected])
-
-  const initializeDeepgram = async () => {
-    try {
-      // In a real implementation, you'd get this from environment variables
-      const DEEPGRAM_API_KEY = "42a574c1a2aa036676d995c0f4e7120c723df1f3"
-
-      // Close existing connection if any
-      if (deepgramSocketRef.current) {
-        deepgramSocketRef.current.close()
-      }
-
-      console.log("Initializing Deepgram connection...")
-
-      // Use a simpler WebSocket configuration that's more compatible
-      const deepgramSocket = new WebSocket(
-        `wss://api.deepgram.com/v1/listen?model=nova-2&language=en-US&smart_format=true&interim_results=true`,
-        ["token", DEEPGRAM_API_KEY]
-      )
-
-      deepgramSocket.onopen = () => {
-        console.log("✅ Deepgram connection opened successfully")
-        setIsConnected(true)
-      }
-
-      deepgramSocket.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data)
-
-          if (data.channel?.alternatives?.[0]?.transcript) {
-            const transcript = data.channel.alternatives[0].transcript
-
-            if (data.is_final && transcript.trim()) {
-              // Process final transcript
-              console.log("📝 Final transcript:", transcript)
-              processUserInput(transcript)
-              setTranscript("")
-            } else if (transcript.trim()) {
-              // Update live transcript
-              setTranscript(transcript)
-            }
-          }
-
-          // Handle any errors from Deepgram
-          if (data.error) {
-            console.error("❌ Deepgram transcription error:", data.error)
-            setIsConnected(false)
-          }
-
-          // Handle warning messages
-          if (data.warning) {
-            console.warn("⚠️ Deepgram warning:", data.warning)
-          }
-        } catch (error) {
-          console.error("❌ Error parsing Deepgram response:", error)
-        }
-      }
-
-      deepgramSocket.onerror = (error) => {
-        console.error("❌ Deepgram WebSocket error:", error)
-        setIsConnected(false)
-        // Try to reconnect after a delay
-        setTimeout(() => {
-          if (deepgramSocketRef.current?.readyState === WebSocket.CLOSED) {
-            console.log("🔄 Attempting to reconnect to Deepgram...")
-            initializeDeepgram()
-          }
-        }, 3000)
-      }
-
-      deepgramSocket.onclose = (event) => {
-        console.log(
-          `🔌 Deepgram connection closed - Code: ${event.code}, Reason: ${event.reason}`
-        )
-        setIsConnected(false)
-
-        // Log specific close codes for debugging
-        if (event.code === 1000) {
-          console.log("✅ Normal closure")
-        } else if (event.code === 1006) {
-          console.log("❌ Abnormal closure - likely connection issue")
-        } else if (event.code === 4001) {
-          console.log("❌ Authentication failed - check API key")
-        } else {
-          console.log(`❌ Unexpected closure code: ${event.code}`)
-        }
-
-        // Try to reconnect if it wasn't a normal closure or auth failure
-        if (event.code !== 1000 && event.code !== 4001) {
-          setTimeout(() => {
-            console.log("🔄 Attempting to reconnect to Deepgram...")
-            initializeDeepgram()
-          }, 3000)
-        }
-      }
-
-      deepgramSocketRef.current = deepgramSocket
-    } catch (error) {
-      console.error("❌ Error initializing Deepgram:", error)
-      setIsConnected(false)
-    }
-  }
+  }, [isConnected])
 
   const startRecording = async () => {
     try {
       console.log("🎤 Starting recording...")
 
-      // Check if Deepgram is connected first
-      if (
-        !isConnected ||
-        deepgramSocketRef.current?.readyState !== WebSocket.OPEN
-      ) {
-        console.log("❌ Deepgram not connected, cannot start recording")
-        alert(
-          "Speech recognition is not connected. Please wait for connection or try the reconnect button."
-        )
+      if (!isConnected) {
+        alert("Voice service is not connected. Please wait for connection.")
         return
       }
 
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          sampleRate: 16000,
-          channelCount: 1,
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-        },
-      })
-
-      // Use a simpler audio format that works better with Deepgram
-      let mimeType = "audio/webm;codecs=opus"
-      if (MediaRecorder.isTypeSupported("audio/webm")) {
-        mimeType = "audio/webm"
-      } else if (MediaRecorder.isTypeSupported("audio/wav")) {
-        mimeType = "audio/wav"
-      }
-
-      console.log("🎵 Using audio format:", mimeType)
-
-      const mediaRecorder = new MediaRecorder(stream, {
-        mimeType: mimeType,
-      })
-
-      mediaRecorderRef.current = mediaRecorder
-      audioChunksRef.current = []
-
-      mediaRecorder.ondataavailable = async (event) => {
-        if (event.data.size > 0) {
-          audioChunksRef.current.push(event.data)
-
-          // Send raw audio data to Deepgram (it can handle WebM format)
-          try {
-            if (deepgramSocketRef.current?.readyState === WebSocket.OPEN) {
-              // Convert to ArrayBuffer and send directly
-              const arrayBuffer = await event.data.arrayBuffer()
-              deepgramSocketRef.current.send(arrayBuffer)
-            } else {
-              console.log("❌ Deepgram WebSocket not open, stopping recording")
-              setIsConnected(false)
-              setIsRecording(false)
-            }
-          } catch (error) {
-            console.error("❌ Error sending audio data to Deepgram:", error)
-            setIsConnected(false)
-            setIsRecording(false)
-          }
-        }
-      }
-
-      mediaRecorder.onerror = (event) => {
-        console.error("❌ MediaRecorder error:", event)
-        setIsRecording(false)
-      }
-
-      mediaRecorder.onstart = () => {
-        console.log("✅ MediaRecorder started successfully")
-      }
-
-      mediaRecorder.onstop = () => {
-        console.log("⏹️ MediaRecorder stopped")
-        stream.getTracks().forEach((track) => track.stop())
-      }
-
-      // Start recording with longer intervals for better performance
-      mediaRecorder.start(500) // Send data every 500ms
+      // Set up audio recorder
+      audioRecorderRef.current = await recordAudio()
+      audioRecorderRef.current.start()
       setIsRecording(true)
-      console.log("🎤 Recording started successfully with mime type:", mimeType)
+      setCurrentTranscript("Listening...")
     } catch (error) {
       console.error("❌ Error starting recording:", error)
       setIsRecording(false)
@@ -286,52 +117,113 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
             "Could not access microphone. Please check your browser permissions and try again."
           )
         }
-      } else {
-        alert(
-          "Could not access microphone. Please check your browser permissions and try again."
-        )
       }
     }
   }
 
-  const stopRecording = () => {
-    if (
-      mediaRecorderRef.current &&
-      mediaRecorderRef.current.state !== "inactive"
-    ) {
-      mediaRecorderRef.current.stop()
-    }
-    setIsRecording(false)
+  const stopRecording = async () => {
+    try {
+      if (!audioRecorderRef.current) return
 
-    // Send final message to Deepgram to indicate end of audio
-    if (deepgramSocketRef.current?.readyState === WebSocket.OPEN) {
-      deepgramSocketRef.current.send(JSON.stringify({ type: "CloseStream" }))
+      console.log("⏹️ Stopping recording...")
+      setIsRecording(false)
+      setCurrentTranscript("Processing...")
+      setIsProcessing(true)
+
+      const audioBlob = await audioRecorderRef.current.stop()
+      console.log("📁 Audio recorded, size:", audioBlob.size)
+
+      // Process the audio through our backend
+      const result = await processVoiceInput(
+        audioBlob,
+        conversation,
+        extractedData
+      )
+
+      if (result.success) {
+        setCurrentTranscript("")
+
+        // Add user message to conversation
+        const userMessage: ConversationMessage = {
+          type: "user",
+          content: result.transcription,
+          timestamp: new Date(),
+        }
+
+        // Add AI response to conversation
+        const aiMessage: ConversationMessage = {
+          type: "assistant",
+          content: result.aiResponse,
+          timestamp: new Date(),
+        }
+
+        const updatedConversation = [...conversation, userMessage, aiMessage]
+        setConversation(updatedConversation)
+
+        // Update extracted data
+        setExtractedData(result.extractedData)
+        onDataExtracted(result.extractedData)
+
+        // Set follow-up questions
+        setFollowUpQuestions(result.followUpQuestions)
+
+        // Update parent with conversation
+        onConversationUpdate(
+          updatedConversation.map((msg) => `${msg.type}: ${msg.content}`)
+        )
+
+        // Audio is automatically played by the voice API
+        setIsPlaying(true)
+        // Estimate audio duration and reset playing state
+        setTimeout(() => setIsPlaying(false), result.aiResponse.length * 50) // Rough estimate
+      } else {
+        setCurrentTranscript("")
+        throw new Error(result.error || "Voice processing failed")
+      }
+    } catch (error) {
+      console.error("❌ Error processing voice input:", error)
+      setCurrentTranscript("")
+
+      const fallbackResponse =
+        "I'm sorry, I had trouble processing that. Could you please try again?"
+
+      const aiMessage: ConversationMessage = {
+        type: "assistant",
+        content: fallbackResponse,
+        timestamp: new Date(),
+      }
+
+      const updatedConversation = [...conversation, aiMessage]
+      setConversation(updatedConversation)
+      onConversationUpdate(
+        updatedConversation.map((msg) => `${msg.type}: ${msg.content}`)
+      )
+
+      // Try to speak the error message
+      convertTextToSpeech(fallbackResponse)
+    } finally {
+      setIsProcessing(false)
+      audioRecorderRef.current = null
+    }
+  }
+
+  const toggleRecording = async () => {
+    if (isRecording) {
+      await stopRecording()
+    } else {
+      await startRecording()
     }
   }
 
   const handleTextSubmit = async () => {
     if (!textInput.trim()) return
 
-    await processUserInput(textInput)
-    setTextInput("")
-  }
-
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault()
-      handleTextSubmit()
-    }
-  }
-
-  const processUserInput = async (userInput: string) => {
-    if (!userInput.trim()) return
-
     setIsProcessing(true)
 
     // Add user message to conversation
     const userMessage: ConversationMessage = {
       type: "user",
-      content: userInput,
+      content: textInput,
       timestamp: new Date(),
     }
 
@@ -339,74 +231,63 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
     setConversation(updatedConversation)
 
     try {
-      if (!openAIConnected) {
-        throw new Error("OpenAI service is not available")
+      // Create a temporary audio blob from text (we could record the user speaking this, but for simplicity, we'll simulate)
+      // In a real implementation, you might want to create a separate text processing endpoint
+      // For now, we'll use the existing OpenAI conversation API
+      const response = await fetch("http://localhost:3001/api/conversation", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          userMessage: textInput,
+          conversationHistory: updatedConversation,
+          extractedData: extractedData,
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to process text input")
       }
 
-      // Use OpenAI API for conversation and data extraction
-      const response = await generateConversationResponse(
-        userInput,
-        updatedConversation,
-        extractedData
-      )
+      const result = await response.json()
 
-      if (response.success) {
+      if (result.success) {
         // Update extracted data
-        const mergedData = { ...extractedData, ...response.extractedData }
+        const mergedData = { ...extractedData, ...result.extractedData }
         setExtractedData(mergedData)
         onDataExtracted(mergedData)
 
         // Set follow-up questions
-        setFollowUpQuestions(response.followUpQuestions || [])
+        setFollowUpQuestions(result.followUpQuestions || [])
 
         // Add AI response to conversation
         const aiMessage: ConversationMessage = {
           type: "assistant",
-          content: response.aiResponse,
+          content: result.aiResponse,
           timestamp: new Date(),
         }
 
         const finalConversation = [...updatedConversation, aiMessage]
         setConversation(finalConversation)
-
-        // Update parent with conversation
         onConversationUpdate(
           finalConversation.map((msg) => `${msg.type}: ${msg.content}`)
         )
 
         // Convert AI response to speech
-        await speakText(response.aiResponse)
+        const speechSuccess = await convertTextToSpeech(result.aiResponse)
+        if (speechSuccess) {
+          setIsPlaying(true)
+          setTimeout(() => setIsPlaying(false), result.aiResponse.length * 50)
+        }
       } else {
-        throw new Error(response.error || "Failed to process conversation")
+        throw new Error(result.error || "Failed to process conversation")
       }
     } catch (error) {
-      console.error("Error processing user input:", error)
+      console.error("Error processing text input:", error)
 
-      // Determine appropriate fallback response based on error type
-      let fallbackResponse =
-        "I'm sorry, I'm having trouble processing that right now. Could you please try again?"
-
-      if (error instanceof Error) {
-        if (
-          error.message.includes("network") ||
-          error.message.includes("timeout")
-        ) {
-          fallbackResponse =
-            "I'm experiencing connection issues. Please check your internet connection and try again."
-        } else if (
-          error.message.includes("OpenAI") ||
-          error.message.includes("API")
-        ) {
-          fallbackResponse =
-            "I'm having trouble connecting to my AI service. Let me try a basic response while we work on reconnecting."
-        } else if (
-          error.message.includes("audio") ||
-          error.message.includes("speech")
-        ) {
-          fallbackResponse =
-            "I had trouble processing your voice input. Could you try speaking more clearly or switch to text input?"
-        }
-      }
+      const fallbackResponse =
+        "I'm sorry, I had trouble processing that. Could you please try again?"
 
       const aiMessage: ConversationMessage = {
         type: "assistant",
@@ -420,141 +301,87 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
         finalConversation.map((msg) => `${msg.type}: ${msg.content}`)
       )
 
-      // Try to speak the error message, but don't fail if TTS also fails
-      try {
-        await speakText(fallbackResponse)
-      } catch (ttsError) {
-        console.error("TTS also failed:", ttsError)
-      }
+      convertTextToSpeech(fallbackResponse)
     } finally {
       setIsProcessing(false)
+      setTextInput("")
     }
   }
 
-  const speakText = async (text: string) => {
-    try {
-      setIsPlaying(true)
-
-      // Use ElevenLabs API for high-quality text-to-speech
-      const response = await fetch(
-        `https://api.elevenlabs.io/v1/text-to-speech/21m00Tcm4TlvDq8ikWAM`,
-        {
-          method: "POST",
-          headers: {
-            Accept: "audio/mpeg",
-            "Content-Type": "application/json",
-            "xi-api-key": "sk_8a53c6b4b716cc206df1806ef03ef165def50417ccec09eb",
-          },
-          body: JSON.stringify({
-            text: text,
-            model_id: "eleven_monolingual_v1",
-            voice_settings: {
-              stability: 0.5,
-              similarity_boost: 0.5,
-              style: 0.0,
-              use_speaker_boost: true,
-            },
-          }),
-        }
-      )
-
-      if (response.ok) {
-        const audioBuffer = await response.arrayBuffer()
-        const audioContext = new AudioContext()
-
-        const decodedData = await audioContext.decodeAudioData(audioBuffer)
-        const source = audioContext.createBufferSource()
-        source.buffer = decodedData
-        source.connect(audioContext.destination)
-
-        source.onended = () => {
-          setIsPlaying(false)
-        }
-
-        source.start()
-      } else {
-        throw new Error(`ElevenLabs API error: ${response.statusText}`)
-      }
-    } catch (error) {
-      console.error(
-        "Error with ElevenLabs TTS, falling back to browser:",
-        error
-      )
-      // Fallback to browser's built-in speech synthesis
-      const utterance = new SpeechSynthesisUtterance(text)
-      utterance.rate = 0.9
-      utterance.pitch = 1
-      utterance.volume = 1
-
-      utterance.onend = () => {
-        setIsPlaying(false)
-      }
-
-      speechSynthesis.speak(utterance)
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault()
+      handleTextSubmit()
     }
-  }
-
-  const toggleRecording = async () => {
-    if (isRecording) {
-      stopRecording()
-    } else {
-      // Check connection before starting recording
-      if (
-        !isConnected ||
-        deepgramSocketRef.current?.readyState !== WebSocket.OPEN
-      ) {
-        console.log("🔄 Deepgram not connected, attempting to reconnect...")
-
-        // Show user we're trying to connect
-        const originalConnected = isConnected
-        setIsConnected(false)
-
-        try {
-          await initializeDeepgram()
-
-          // Wait a moment for connection to establish
-          let attempts = 0
-          const maxAttempts = 10
-
-          while (
-            attempts < maxAttempts &&
-            deepgramSocketRef.current?.readyState !== WebSocket.OPEN
-          ) {
-            await new Promise((resolve) => setTimeout(resolve, 500))
-            attempts++
-          }
-
-          if (deepgramSocketRef.current?.readyState === WebSocket.OPEN) {
-            console.log("✅ Connected successfully, starting recording...")
-            startRecording()
-          } else {
-            console.log("❌ Failed to connect after multiple attempts")
-            alert(
-              "Could not connect to speech recognition service. Please check your internet connection and try the reconnect button."
-            )
-          }
-        } catch (error) {
-          console.error("❌ Error during reconnection:", error)
-          alert(
-            "Failed to establish connection. Please try again or check your internet connection."
-          )
-        }
-      } else {
-        startRecording()
-      }
-    }
-  }
-
-  const reconnectDeepgram = () => {
-    setIsConnected(false)
-    if (deepgramSocketRef.current) {
-      deepgramSocketRef.current.close()
-    }
-    initializeDeepgram()
   }
 
   const handleFollowUpClick = async (question: string) => {
-    await processUserInput(question)
+    if (inputMode === "text") {
+      setTextInput(question)
+    } else {
+      // For voice mode, we can auto-process the question
+      setIsProcessing(true)
+
+      const userMessage: ConversationMessage = {
+        type: "user",
+        content: question,
+        timestamp: new Date(),
+      }
+
+      const updatedConversation = [...conversation, userMessage]
+      setConversation(updatedConversation)
+
+      try {
+        const response = await fetch("http://localhost:3001/api/conversation", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            userMessage: question,
+            conversationHistory: updatedConversation,
+            extractedData: extractedData,
+          }),
+        })
+
+        const result = await response.json()
+
+        if (result.success) {
+          const mergedData = { ...extractedData, ...result.extractedData }
+          setExtractedData(mergedData)
+          onDataExtracted(mergedData)
+          setFollowUpQuestions(result.followUpQuestions || [])
+
+          const aiMessage: ConversationMessage = {
+            type: "assistant",
+            content: result.aiResponse,
+            timestamp: new Date(),
+          }
+
+          const finalConversation = [...updatedConversation, aiMessage]
+          setConversation(finalConversation)
+          onConversationUpdate(
+            finalConversation.map((msg) => `${msg.type}: ${msg.content}`)
+          )
+
+          const speechSuccess = await convertTextToSpeech(result.aiResponse)
+          if (speechSuccess) {
+            setIsPlaying(true)
+            setTimeout(() => setIsPlaying(false), result.aiResponse.length * 50)
+          }
+        }
+      } catch (error) {
+        console.error("Error processing follow-up question:", error)
+      } finally {
+        setIsProcessing(false)
+      }
+    }
+  }
+
+  const reconnectVoice = async () => {
+    setIsConnected(null)
+    const connected = await testVoiceConnection()
+    setIsConnected(connected)
   }
 
   return (
@@ -566,74 +393,52 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
             Voice Agent Status
           </h3>
           <div className="flex items-center space-x-3">
-            {/* Deepgram Status */}
+            {/* Voice Service Status */}
             <div
               className={`flex items-center px-3 py-1 rounded-full text-sm font-medium ${
-                isConnected
+                isConnected === true
                   ? "bg-green-100 text-green-800"
-                  : "bg-red-100 text-red-800"
-              }`}
-            >
-              <div
-                className={`w-2 h-2 rounded-full mr-2 ${
-                  isConnected ? "bg-green-500" : "bg-red-500"
-                }`}
-              />
-              Speech: {isConnected ? "Connected" : "Disconnected"}
-            </div>
-
-            {/* OpenAI Status */}
-            <div
-              className={`flex items-center px-3 py-1 rounded-full text-sm font-medium ${
-                openAIConnected === true
-                  ? "bg-green-100 text-green-800"
-                  : openAIConnected === false
+                  : isConnected === false
                   ? "bg-red-100 text-red-800"
                   : "bg-yellow-100 text-yellow-800"
               }`}
             >
-              {openAIConnected === null ? (
+              {isConnected === null ? (
                 <Loader2 className="w-3 h-3 mr-2 animate-spin" />
-              ) : openAIConnected ? (
+              ) : isConnected ? (
                 <CheckCircle className="w-3 h-3 mr-2" />
               ) : (
                 <AlertCircle className="w-3 h-3 mr-2" />
               )}
-              AI:{" "}
-              {openAIConnected === null
+              Voice Service:{" "}
+              {isConnected === null
                 ? "Testing..."
-                : openAIConnected
+                : isConnected
                 ? "Connected"
-                : "Error"}
+                : "Disconnected"}
             </div>
 
             {/* Reconnect Button */}
-            {!isConnected && (
+            {isConnected === false && (
               <button
-                onClick={reconnectDeepgram}
+                onClick={reconnectVoice}
                 className="px-3 py-1 text-sm bg-blue-500 text-white rounded-full hover:bg-blue-600 transition-colors"
               >
-                Reconnect Speech
+                Reconnect
               </button>
             )}
           </div>
         </div>
 
-        {(!isConnected || !openAIConnected) && (
+        {isConnected === false && (
           <div className="space-y-2">
             <p className="text-sm text-gray-600">
-              {!isConnected &&
-                "⚠️ Speech recognition is disconnected. Click 'Reconnect Speech' to retry."}
-              {!openAIConnected && !isConnected && " "}
-              {!openAIConnected &&
-                "⚠️ AI service is unavailable - using basic responses. This may affect conversation quality."}
+              ⚠️ Voice service is unavailable. Please check your internet
+              connection and backend server.
             </p>
-            {(!isConnected || !openAIConnected) && (
-              <div className="text-xs text-gray-500">
-                Tip: You can still use text input while connections are being
-                restored.
-              </div>
-            )}
+            <div className="text-xs text-gray-500">
+              Make sure your backend server is running on http://localhost:3001
+            </div>
           </div>
         )}
       </div>
@@ -729,12 +534,10 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
       </div>
 
       {/* Live Transcript */}
-      {transcript && inputMode === "voice" && (
+      {currentTranscript && inputMode === "voice" && (
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <h4 className="text-sm font-medium text-gray-900 mb-2">
-            Live Transcript:
-          </h4>
-          <p className="text-gray-700 italic">"{transcript}"</p>
+          <h4 className="text-sm font-medium text-gray-900 mb-2">Status:</h4>
+          <p className="text-gray-700 italic">"{currentTranscript}"</p>
         </div>
       )}
 

@@ -2,12 +2,18 @@ const express = require('express');
 const cors = require('cors');
 const http = require('http');
 const socketIo = require('socket.io');
+const multer = require('multer');
 const { runAutomation } = require('./automation');
 const { 
   generateConversationResponse, 
   extractDataFromConversation, 
   generateFollowUpQuestions 
 } = require('./openai-service');
+const {
+  speechToText,
+  textToSpeech,
+  testConnection: testElevenLabsConnection
+} = require('./elevenlabs-service');
 
 // ============================================
 // SERVER CONFIGURATION
@@ -31,6 +37,22 @@ const PORT = 3001;
 app.use(cors());
 app.use(express.json());
 
+// Configure multer for audio file uploads
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10MB limit
+  },
+  fileFilter: (req, file, cb) => {
+    // Accept audio files
+    if (file.mimetype.startsWith('audio/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only audio files are allowed'), false);
+    }
+  }
+});
+
 // ============================================
 // SOCKET.IO CONNECTION HANDLING
 // ============================================
@@ -46,6 +68,137 @@ io.on('connection', (socket) => {
 // ============================================
 // API ROUTES
 // ============================================
+
+// Voice Processing API - Process voice input and return voice response
+app.post('/api/voice/process', upload.single('audio'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        error: 'No audio file provided'
+      });
+    }
+
+    console.log('🎙️ Processing voice input...');
+    
+    const { conversationHistory = [], extractedData = {} } = req.body;
+    const parsedHistory = typeof conversationHistory === 'string' 
+      ? JSON.parse(conversationHistory) 
+      : conversationHistory;
+    const parsedData = typeof extractedData === 'string' 
+      ? JSON.parse(extractedData) 
+      : extractedData;
+
+    // Step 1: Convert speech to text using ElevenLabs
+    const transcription = await speechToText(req.file.buffer, req.file.originalname);
+    
+    if (!transcription || !transcription.trim()) {
+      return res.status(400).json({
+        success: false,
+        error: 'Could not transcribe audio. Please try speaking more clearly.'
+      });
+    }
+
+    console.log('📝 Transcription:', transcription);
+
+    // Step 2: Generate AI response using OpenAI
+    const aiResponse = await generateConversationResponse(
+      transcription,
+      parsedHistory,
+      parsedData
+    );
+
+    // Step 3: Extract any new data from the conversation
+    const newExtractedData = await extractDataFromConversation(
+      transcription,
+      parsedHistory
+    );
+
+    // Merge with existing data
+    const mergedData = { ...parsedData, ...newExtractedData };
+
+    // Step 4: Generate follow-up questions
+    const followUpQuestions = await generateFollowUpQuestions(
+      mergedData,
+      parsedHistory
+    );
+
+    // Step 5: Convert AI response to speech using ElevenLabs
+    const audioBuffer = await textToSpeech(aiResponse);
+
+    // Send response with audio and data
+    res.set({
+      'Content-Type': 'audio/mpeg',
+      'X-Transcription': encodeURIComponent(transcription),
+      'X-AI-Response': encodeURIComponent(aiResponse),
+      'X-Extracted-Data': encodeURIComponent(JSON.stringify(mergedData)),
+      'X-Follow-Up-Questions': encodeURIComponent(JSON.stringify(followUpQuestions)),
+      'Access-Control-Expose-Headers': 'X-Transcription,X-AI-Response,X-Extracted-Data,X-Follow-Up-Questions'
+    });
+
+    res.send(audioBuffer);
+
+  } catch (error) {
+    console.error('❌ Voice processing error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to process voice input'
+    });
+  }
+});
+
+// Text-to-Speech API - Convert text to speech
+app.post('/api/voice/text-to-speech', async (req, res) => {
+  try {
+    const { text } = req.body;
+    
+    if (!text) {
+      return res.status(400).json({
+        success: false,
+        error: 'Text is required'
+      });
+    }
+
+    console.log('🔊 Converting text to speech:', text.substring(0, 50) + '...');
+
+    const audioBuffer = await textToSpeech(text);
+
+    res.set({
+      'Content-Type': 'audio/mpeg',
+      'Content-Length': audioBuffer.length
+    });
+
+    res.send(audioBuffer);
+
+  } catch (error) {
+    console.error('❌ Text-to-speech error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to convert text to speech'
+    });
+  }
+});
+
+// ElevenLabs Connection Test API
+app.get('/api/voice/test-connection', async (req, res) => {
+  try {
+    const isConnected = await testElevenLabsConnection();
+    
+    res.json({
+      success: true,
+      connected: isConnected,
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error) {
+    console.error('❌ ElevenLabs connection test error:', error);
+    res.status(500).json({
+      success: false,
+      connected: false,
+      error: error.message
+    });
+  }
+});
 
 // OpenAI Conversation API
 app.post('/api/conversation', async (req, res) => {
