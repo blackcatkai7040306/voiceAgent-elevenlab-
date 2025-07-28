@@ -6,57 +6,6 @@ const VOICE_ID = '21m00Tcm4TlvDq8ikWAM'; // Rachel voice - you can change this
 const API_BASE_URL = 'https://api.elevenlabs.io/v1';
 
 /**
- * Convert speech to text using ElevenLabs STT
- * @param {Buffer} audioBuffer - Audio file buffer
- * @param {string} filename - Original filename for content type detection
- * @returns {Promise<string>} - Transcribed text
- */
-async function speechToText(audioBuffer, filename = '') {
-  try {
-    const { default: fetch } = await import('node-fetch');
-    console.log('🎙️ Converting speech to text with ElevenLabs...');
-    
-    // Determine content type based on filename
-    let contentType = 'audio/wav';
-    if (filename.includes('.mp3')) contentType = 'audio/mpeg';
-    else if (filename.includes('.m4a')) contentType = 'audio/mp4';
-    else if (filename.includes('.webm')) contentType = 'audio/webm';
-    else if (filename.includes('.ogg')) contentType = 'audio/ogg';
-
-    const FormData = require('form-data');
-    const formData = new FormData();
-    formData.append('audio', audioBuffer, {
-      filename: filename || 'audio.wav',
-      contentType: contentType
-    });
-
-    const response = await fetch(`${API_BASE_URL}/speech-to-text`, {
-      method: 'POST',
-      headers: {
-        'xi-api-key': ELEVENLABS_API_KEY,
-      },
-      body: formData
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('❌ ElevenLabs STT error:', response.status, errorText);
-      throw new Error(`ElevenLabs STT failed: ${response.status} - ${errorText}`);
-    }
-
-    const result = await response.json();
-    const transcription = result.text || '';
-    
-    console.log('✅ Speech-to-text successful:', transcription);
-    return transcription;
-
-  } catch (error) {
-    console.error('❌ Error in speechToText:', error);
-    throw new Error(`Speech-to-text conversion failed: ${error.message}`);
-  }
-}
-
-/**
  * Convert text to speech using ElevenLabs TTS
  * @param {string} text - Text to convert to speech
  * @param {Object} options - Voice settings (optional)
@@ -161,7 +110,6 @@ async function testConnection() {
 }
 
 module.exports = {
-  speechToText,
   textToSpeech,
   getVoices,
   testConnection,

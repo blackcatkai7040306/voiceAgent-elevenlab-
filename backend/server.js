@@ -10,10 +10,13 @@ const {
   generateFollowUpQuestions 
 } = require('./openai-service');
 const {
-  speechToText,
   textToSpeech,
   testConnection: testElevenLabsConnection
 } = require('./elevenlabs-service');
+const {
+  speechToText,
+  testConnection: testDeepgramConnection
+} = require('./deepgram-service');
 
 // ============================================
 // SERVER CONFIGURATION
@@ -89,7 +92,7 @@ app.post('/api/voice/process', upload.single('audio'), async (req, res) => {
       ? JSON.parse(extractedData) 
       : extractedData;
 
-    // Step 1: Convert speech to text using ElevenLabs
+    // Step 1: Convert speech to text using Deepgram
     const transcription = await speechToText(req.file.buffer, req.file.originalname);
     
     if (!transcription || !transcription.trim()) {
@@ -179,19 +182,37 @@ app.post('/api/voice/text-to-speech', async (req, res) => {
   }
 });
 
-// ElevenLabs Connection Test API
+// Voice Services Connection Test API
 app.get('/api/voice/test-connection', async (req, res) => {
   try {
-    const isConnected = await testElevenLabsConnection();
+    console.log('🔍 Testing voice services connections...');
+    
+    // Test both Deepgram (STT) and ElevenLabs (TTS) connections
+    const [deepgramConnected, elevenLabsConnected] = await Promise.all([
+      testDeepgramConnection(),
+      testElevenLabsConnection()
+    ]);
+    
+    const overallConnected = deepgramConnected && elevenLabsConnected;
     
     res.json({
       success: true,
-      connected: isConnected,
+      connected: overallConnected,
+      services: {
+        deepgram: {
+          name: 'Deepgram (STT)',
+          connected: deepgramConnected
+        },
+        elevenlabs: {
+          name: 'ElevenLabs (TTS)',
+          connected: elevenLabsConnected
+        }
+      },
       timestamp: new Date().toISOString()
     });
 
   } catch (error) {
-    console.error('❌ ElevenLabs connection test error:', error);
+    console.error('❌ Voice services connection test error:', error);
     res.status(500).json({
       success: false,
       connected: false,
