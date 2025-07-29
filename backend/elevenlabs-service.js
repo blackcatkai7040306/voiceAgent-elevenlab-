@@ -2,7 +2,7 @@ const fs = require('fs');
 
 // ElevenLabs API configuration
 const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY || 'sk_8a53c6b4b716cc206df1806ef03ef165def50417ccec09eb';
-const VOICE_ID = '21m00Tcm4TlvDq8ikWAM'; // Rachel voice - you can change this
+const VOICE_ID = 'TxGEqnHWrfWFTfGW9XjX'; // Josh voice - middle-aged professional male
 const API_BASE_URL = 'https://api.elevenlabs.io/v1';
 
 /**

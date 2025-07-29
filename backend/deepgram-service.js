@@ -1,10 +1,14 @@
 const { createClient } = require('@deepgram/sdk');
 
 // Deepgram API configuration
-const DEEPGRAM_API_KEY = process.env.DEEPGRAM_API_KEY || '42a574c1a2aa036676d995c0f4e7120c723df1f3';
+const DEEPGRAM_API_KEY = process.env.DEEPGRAM_API_KEY || '523d5c4b-35ad-4788-aab7-0c9422453a8f';
 
-// Initialize Deepgram client
-const deepgram = createClient(DEEPGRAM_API_KEY);
+// Initialize Deepgram client with proper configuration
+const deepgram = createClient(DEEPGRAM_API_KEY, {
+  global: {
+    url: 'https://api.deepgram.com',
+  },
+});
 
 /**
  * Convert speech to text using Deepgram
@@ -42,8 +46,8 @@ async function speechToText(audioBuffer, filename = '') {
     // Send audio to Deepgram for transcription
     const { result, error } = await deepgram.listen.prerecorded.transcribeFile(
       audioBuffer,
-      options,
       {
+        ...options,
         mimetype: mimetype,
       }
     );

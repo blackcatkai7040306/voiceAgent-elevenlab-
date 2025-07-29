@@ -128,9 +128,11 @@ export class ElevenLabsClient {
 
 // Create client instance with environment variables
 export const elevenLabsClient = new ElevenLabsClient({
-  apiKey: process.env.NEXT_PUBLIC_ELEVENLABS_API_KEY || "sk_8a53c6b4b716cc206df1806ef03ef165def50417ccec09eb",
+  apiKey:
+    process.env.NEXT_PUBLIC_ELEVENLABS_API_KEY ||
+    "sk_8a53c6b4b716cc206df1806ef03ef165def50417ccec09eb",
   voiceId:
-    process.env.NEXT_PUBLIC_ELEVENLABS_VOICE_ID || "21m00Tcm4TlvDq8ikWAM",
+    process.env.NEXT_PUBLIC_ELEVENLABS_VOICE_ID || "TxGEqnHWrfWFTfGW9XjX",
   model: process.env.NEXT_PUBLIC_ELEVENLABS_MODEL || "eleven_monolingual_v1",
   voice_settings: {
     stability: 0.5,
