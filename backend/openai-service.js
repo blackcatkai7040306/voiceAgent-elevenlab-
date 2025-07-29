@@ -1,8 +1,8 @@
 const OpenAI = require('openai');
-
+require('dotenv').config();
 // Initialize OpenAI client
 const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY || '', // In production, use environment variables
+  apiKey: process.env.OPENAI_API_KEY, // In production, use environment variables
 });
 
 // System prompt for encouraging conversation and information gathering
@@ -80,9 +80,9 @@ async function generateConversationResponse(userMessage, conversationHistory = [
     // Add context about what data we already have
     if (Object.keys(extractedData).length > 0) {
       const dataContext = `Current extracted data: ${JSON.stringify(extractedData, null, 2)}`;
-      messages.push({ 
-        role: 'system', 
-        content: `${dataContext}\n\nUse this information to guide the conversation and ask for missing data naturally.` 
+      messages.push({
+        role: 'system',
+        content: `${dataContext}\n\nUse this information to guide the conversation and ask for missing data naturally.`
       });
     }
 

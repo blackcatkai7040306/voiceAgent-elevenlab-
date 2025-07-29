@@ -1,8 +1,8 @@
 const fs = require('fs');
-
+require('dotenv').config();
 // ElevenLabs API configuration
-const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY || 'sk_8a53c6b4b716cc206df1806ef03ef165def50417ccec09eb';
-const VOICE_ID = 'TxGEqnHWrfWFTfGW9XjX'; // Josh voice - middle-aged professional male
+const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY
+const VOICE_ID = process.env.VOICE_ID; // Josh voice - middle-aged professional male
 const API_BASE_URL = 'https://api.elevenlabs.io/v1';
 
 /**
@@ -15,7 +15,7 @@ async function textToSpeech(text, options = {}) {
   try {
     const { default: fetch } = await import('node-fetch');
     console.log('🔊 Converting text to speech with ElevenLabs...');
-    
+
     const voiceSettings = {
       stability: options.stability || 0.5,
       similarity_boost: options.similarity_boost || 0.5,
@@ -48,7 +48,7 @@ async function textToSpeech(text, options = {}) {
 
     const audioBuffer = Buffer.from(await response.arrayBuffer());
     console.log('✅ Text-to-speech successful, audio buffer size:', audioBuffer.length);
-    
+
     return audioBuffer;
 
   } catch (error) {
@@ -91,7 +91,7 @@ async function testConnection() {
   try {
     const { default: fetch } = await import('node-fetch');
     console.log('🔍 Testing ElevenLabs API connection...');
-    
+
     const response = await fetch(`${API_BASE_URL}/voices`, {
       headers: {
         'xi-api-key': ELEVENLABS_API_KEY
@@ -100,7 +100,7 @@ async function testConnection() {
 
     const isConnected = response.ok;
     console.log(isConnected ? '✅ ElevenLabs connected' : '❌ ElevenLabs connection failed');
-    
+
     return isConnected;
 
   } catch (error) {

@@ -1,7 +1,7 @@
 import axios from "axios"
 import { ConversationMessage, ExtractedUserData } from "@/types/voiceAgent"
 
-const API_BASE_URL = "http://localhost:3001/api"
+const API_BASE_URL = process.env.NEXT_PUBLIC_SOCKET_URL
 
 // API client instance
 const apiClient = axios.create({

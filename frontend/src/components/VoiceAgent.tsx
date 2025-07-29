@@ -234,7 +234,7 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
       // Create a temporary audio blob from text (we could record the user speaking this, but for simplicity, we'll simulate)
       // In a real implementation, you might want to create a separate text processing endpoint
       // For now, we'll use the existing OpenAI conversation API
-      const response = await fetch("http://localhost:3001/api/conversation", {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_SERVER_URL}/conversation`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -332,7 +332,7 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
       setConversation(updatedConversation)
 
       try {
-        const response = await fetch("http://localhost:3001/api/conversation", {
+        const response = await fetch(`${process.env.NEXT_PUBLIC_SERVER_URL}/conversation`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -395,13 +395,12 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
           <div className="flex items-center space-x-3">
             {/* Voice Service Status */}
             <div
-              className={`flex items-center px-3 py-1 rounded-full text-sm font-medium ${
-                isConnected === true
-                  ? "bg-green-100 text-green-800"
-                  : isConnected === false
+              className={`flex items-center px-3 py-1 rounded-full text-sm font-medium ${isConnected === true
+                ? "bg-green-100 text-green-800"
+                : isConnected === false
                   ? "bg-red-100 text-red-800"
                   : "bg-yellow-100 text-yellow-800"
-              }`}
+                }`}
             >
               {isConnected === null ? (
                 <Loader2 className="w-3 h-3 mr-2 animate-spin" />
@@ -414,8 +413,8 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
               {isConnected === null
                 ? "Testing..."
                 : isConnected
-                ? "Connected"
-                : "Disconnected"}
+                  ? "Connected"
+                  : "Disconnected"}
             </div>
 
             {/* Reconnect Button */}
@@ -448,22 +447,20 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
         <div className="flex items-center justify-center space-x-4 mb-4">
           <button
             onClick={() => setInputMode("voice")}
-            className={`flex items-center px-4 py-2 rounded-lg transition-colors ${
-              inputMode === "voice"
-                ? "bg-blue-500 text-white"
-                : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-            }`}
+            className={`flex items-center px-4 py-2 rounded-lg transition-colors ${inputMode === "voice"
+              ? "bg-blue-500 text-white"
+              : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+              }`}
           >
             <Mic className="w-4 h-4 mr-2" />
             Voice Input
           </button>
           <button
             onClick={() => setInputMode("text")}
-            className={`flex items-center px-4 py-2 rounded-lg transition-colors ${
-              inputMode === "text"
-                ? "bg-blue-500 text-white"
-                : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-            }`}
+            className={`flex items-center px-4 py-2 rounded-lg transition-colors ${inputMode === "text"
+              ? "bg-blue-500 text-white"
+              : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+              }`}
           >
             <Type className="w-4 h-4 mr-2" />
             Text Input
@@ -476,11 +473,10 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
             <button
               onClick={toggleRecording}
               disabled={!isConnected || isProcessing}
-              className={`flex items-center justify-center w-16 h-16 rounded-full transition-all duration-200 ${
-                isRecording
-                  ? "bg-red-500 hover:bg-red-600 text-white"
-                  : "bg-blue-500 hover:bg-blue-600 text-white disabled:bg-gray-400"
-              }`}
+              className={`flex items-center justify-center w-16 h-16 rounded-full transition-all duration-200 ${isRecording
+                ? "bg-red-500 hover:bg-red-600 text-white"
+                : "bg-blue-500 hover:bg-blue-600 text-white disabled:bg-gray-400"
+                }`}
             >
               {isRecording ? (
                 <MicOff className="w-8 h-8" />
@@ -574,11 +570,10 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
             {conversation.map((message, index) => (
               <div
                 key={index}
-                className={`p-3 rounded-lg ${
-                  message.type === "user"
-                    ? "bg-blue-50 border-l-4 border-blue-500"
-                    : "bg-green-50 border-l-4 border-green-500"
-                }`}
+                className={`p-3 rounded-lg ${message.type === "user"
+                  ? "bg-blue-50 border-l-4 border-blue-500"
+                  : "bg-green-50 border-l-4 border-green-500"
+                  }`}
               >
                 <div className="flex items-center justify-between mb-1">
                   <span className="text-sm font-medium text-gray-900">

@@ -1,7 +1,7 @@
 const { createClient } = require('@deepgram/sdk');
-
+require('dotenv').config();
 // Deepgram API configuration
-const DEEPGRAM_API_KEY = process.env.DEEPGRAM_API_KEY || '523d5c4b-35ad-4788-aab7-0c9422453a8f';
+const DEEPGRAM_API_KEY = process.env.DEEPGRAM_API_KEY;
 
 // Initialize Deepgram client with proper configuration
 const deepgram = createClient(DEEPGRAM_API_KEY, {
@@ -19,7 +19,7 @@ const deepgram = createClient(DEEPGRAM_API_KEY, {
 async function speechToText(audioBuffer, filename = '') {
   try {
     console.log('🎙️ Converting speech to text with Deepgram...');
-    
+
     // Determine mimetype based on filename
     let mimetype = 'audio/wav';
     if (filename.includes('.mp3')) mimetype = 'audio/mpeg';
@@ -59,7 +59,7 @@ async function speechToText(audioBuffer, filename = '') {
 
     // Extract transcription from result
     const transcript = result?.results?.channels?.[0]?.alternatives?.[0]?.transcript;
-    
+
     if (!transcript || !transcript.trim()) {
       console.warn('⚠️ No transcription found in Deepgram response');
       throw new Error('No speech detected in audio. Please try speaking more clearly.');
@@ -70,7 +70,7 @@ async function speechToText(audioBuffer, filename = '') {
 
   } catch (error) {
     console.error('❌ Error in speechToText:', error);
-    
+
     if (error.message.includes('401') || error.message.includes('Unauthorized')) {
       throw new Error('Deepgram authentication failed. Please check your API key.');
     } else if (error.message.includes('400') || error.message.includes('Bad Request')) {
@@ -90,7 +90,7 @@ async function speechToText(audioBuffer, filename = '') {
 async function testConnection() {
   try {
     console.log('🔍 Testing Deepgram API connection...');
-    
+
     // Test with a simple API call to check authentication
     const { result, error } = await deepgram.manage.getProjectBalances(
       process.env.DEEPGRAM_PROJECT_ID || 'default'
@@ -108,12 +108,12 @@ async function testConnection() {
 
   } catch (error) {
     console.error('❌ Deepgram connection test failed:', error);
-    
+
     // For connection testing, we'll be more lenient - if it's just auth issues, we still consider it "connected"
     if (error.message && (error.message.includes('network') || error.message.includes('ECONNREFUSED'))) {
       return false;
     }
-    
+
     // If it's auth-related, the service is available but the key might be wrong
     return true;
   }
