@@ -52,6 +52,25 @@ export const VoiceDataDisplay: React.FC<VoiceDataDisplayProps> = ({
     retirementYear: "2030",
   })
 
+  // Helper function to convert month name to number
+  const getMonthNumber = (monthName: string): number => {
+    const months: { [key: string]: number } = {
+      january: 1,
+      february: 2,
+      march: 3,
+      april: 4,
+      may: 5,
+      june: 6,
+      july: 7,
+      august: 8,
+      september: 9,
+      october: 10,
+      november: 11,
+      december: 12,
+    }
+    return months[monthName.toLowerCase()] || 1
+  }
+
   // Helper function to extract retirement month and year from retirement date
   const extractRetirementMonthYear = (
     retirementDate: string,
