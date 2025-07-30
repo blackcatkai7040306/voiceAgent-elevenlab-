@@ -29,6 +29,35 @@ export default function HomePage() {
   const [result, setResult] = useState<AutomationResult | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [extractedData, setExtractedData] = useState<ExtractedData>({})
+  const [voiceData, setVoiceData] = useState<{
+    birthday?: string
+    retirementDate?: string
+    savedAmount?: string
+    age?: string
+    retirementAge?: string
+    longevityEstimate?: string
+    investmentAmount?: string
+  }>({})
+
+  // Extract URL parameters from voice agent
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search)
+    const voiceParams = {
+      birthday: urlParams.get("birthday") || undefined,
+      retirementDate: urlParams.get("retirementDate") || undefined,
+      savedAmount: urlParams.get("savedAmount") || undefined,
+      age: urlParams.get("age") || undefined,
+      retirementAge: urlParams.get("retirementAge") || undefined,
+      longevityEstimate: urlParams.get("longevityEstimate") || undefined,
+      investmentAmount: urlParams.get("investmentAmount") || undefined,
+    }
+
+    // Only set if we have data
+    if (Object.values(voiceParams).some((value) => value !== undefined)) {
+      setVoiceData(voiceParams)
+      console.log("📊 Voice data received:", voiceParams)
+    }
+  }, [])
 
   // Process progress updates to extract data
   useEffect(() => {
@@ -175,6 +204,7 @@ export default function HomePage() {
               onStop={handleStopAutomation}
               status={status}
               isConnected={isConnected}
+              voiceData={voiceData}
             />
 
             {/* Error Display */}

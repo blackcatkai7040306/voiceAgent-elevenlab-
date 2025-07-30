@@ -18,6 +18,15 @@ interface AutomationFormProps {
   onStop: () => void
   status: AutomationStatus
   isConnected: boolean
+  voiceData?: {
+    birthday?: string
+    retirementDate?: string
+    savedAmount?: string
+    age?: string
+    retirementAge?: string
+    longevityEstimate?: string
+    investmentAmount?: string
+  }
 }
 
 export const AutomationForm: React.FC<AutomationFormProps> = ({
@@ -25,15 +34,30 @@ export const AutomationForm: React.FC<AutomationFormProps> = ({
   onStop,
   status,
   isConnected,
+  voiceData,
 }) => {
   const [formData, setFormData] = useState<AutomationFormData>({
     description: "Income Conductor automation workflow",
     sessionId: Date.now().toString(),
-    investmentAmount: "130000",
-    retirementAge: "62",
-    longevityEstimate: "100",
-    birthday: "07/01/1967",
+    investmentAmount: voiceData?.investmentAmount || "130000",
+    retirementAge: voiceData?.retirementAge || "62",
+    longevityEstimate: voiceData?.longevityEstimate || "100",
+    birthday: voiceData?.birthday || "07/01/1967",
   })
+
+  // Update form data when voice data changes
+  React.useEffect(() => {
+    if (voiceData && Object.keys(voiceData).length > 0) {
+      setFormData((prev) => ({
+        ...prev,
+        investmentAmount: voiceData.investmentAmount || prev.investmentAmount,
+        retirementAge: voiceData.retirementAge || prev.retirementAge,
+        longevityEstimate:
+          voiceData.longevityEstimate || prev.longevityEstimate,
+        birthday: voiceData.birthday || prev.birthday,
+      }))
+    }
+  }, [voiceData])
 
   const [showAdvanced, setShowAdvanced] = useState(false)
 
@@ -92,6 +116,28 @@ export const AutomationForm: React.FC<AutomationFormProps> = ({
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
+        {/* Voice Data Indicator */}
+        {voiceData && Object.keys(voiceData).length > 0 && (
+          <div className="bg-gradient-to-r from-green-50 to-emerald-50 p-4 rounded-lg border border-green-200">
+            <div className="flex items-center">
+              <div className="w-2 h-2 bg-green-500 rounded-full mr-3 animate-pulse"></div>
+              <div>
+                <h4 className="font-medium text-green-900">
+                  Data from Voice Agent
+                </h4>
+                <p className="text-sm text-green-700">
+                  The following information was extracted from your voice
+                  conversation:
+                  {voiceData.age && ` Age: ${voiceData.age} years old,`}
+                  {voiceData.retirementDate &&
+                    ` Retirement: ${voiceData.retirementDate},`}
+                  {voiceData.savedAmount && ` Saved: ${voiceData.savedAmount}`}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Investment Configuration Section */}
         <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-6 rounded-xl border border-blue-200 shadow-sm">
           <h4 className="font-semibold text-gray-900 mb-6 flex items-center">
