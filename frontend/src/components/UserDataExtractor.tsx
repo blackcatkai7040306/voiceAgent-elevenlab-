@@ -57,76 +57,6 @@ export const UserDataExtractor: React.FC<UserDataExtractorProps> = ({
     }
   }
 
-  const calculateAge = (birthday: string): number => {
-    try {
-      const birthDate = new Date(birthday)
-      const today = new Date()
-      let age = today.getFullYear() - birthDate.getFullYear()
-      const monthDiff = today.getMonth() - birthDate.getMonth()
-
-      if (
-        monthDiff < 0 ||
-        (monthDiff === 0 && today.getDate() < birthDate.getDate())
-      ) {
-        age--
-      }
-
-      return age
-    } catch {
-      return 0
-    }
-  }
-
-  const formatRetirementDate = (retirementDate: string): string => {
-    try {
-      // If user provided just a year, format it properly
-      if (/^\d{4}$/.test(retirementDate)) {
-        return `January ${retirementDate}`
-      }
-
-      // If user provided just age, calculate year
-      if (/^\d{2}$/.test(retirementDate)) {
-        const currentYear = new Date().getFullYear()
-        const age = calculateAge(extractedData.dateOfBirth || "")
-        const targetYear = currentYear + parseInt(retirementDate) - age
-        return `January ${targetYear}`
-      }
-
-      // Try to parse existing date
-      const date = new Date(retirementDate)
-      if (!isNaN(date.getTime())) {
-        return date.toLocaleDateString("en-US", {
-          year: "numeric",
-          month: "long",
-          day: "numeric",
-        })
-      }
-
-      return retirementDate
-    } catch {
-      return retirementDate
-    }
-  }
-
-  const formatSavedAmount = (amount: string | number): string => {
-    try {
-      const numAmount =
-        typeof amount === "string"
-          ? parseFloat(amount.replace(/[,$]/g, ""))
-          : amount
-      if (isNaN(numAmount)) return amount.toString()
-
-      return new Intl.NumberFormat("en-US", {
-        style: "currency",
-        currency: "USD",
-        minimumFractionDigits: 0,
-        maximumFractionDigits: 0,
-      }).format(numAmount)
-    } catch {
-      return amount.toString()
-    }
-  }
-
   const completionPercentage = () => {
     const fields = ["dateOfBirth", "retirementDate", "currentRetirementSavings"]
     const filledFields = fields.filter(
@@ -244,7 +174,7 @@ export const UserDataExtractor: React.FC<UserDataExtractorProps> = ({
             </div>
           )}
 
-          {/* Date of Birth & Age */}
+          {/* Date of Birth */}
           <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
             <div className="flex items-center">
               <Calendar className="w-5 h-5 text-blue-500 mr-3" />
@@ -266,16 +196,9 @@ export const UserDataExtractor: React.FC<UserDataExtractorProps> = ({
                     className="block w-full mt-1 text-sm border border-gray-300 rounded px-2 py-1"
                   />
                 ) : (
-                  <div>
-                    <p className="text-sm text-gray-600">
-                      {formatDate(extractedData.dateOfBirth)}
-                    </p>
-                    {extractedData.dateOfBirth && (
-                      <p className="text-xs text-blue-600 font-medium">
-                        Age: {calculateAge(extractedData.dateOfBirth)} years old
-                      </p>
-                    )}
-                  </div>
+                  <p className="text-sm text-gray-600">
+                    {formatDate(extractedData.dateOfBirth)}
+                  </p>
                 )}
               </div>
             </div>
@@ -292,7 +215,7 @@ export const UserDataExtractor: React.FC<UserDataExtractorProps> = ({
               <Clock className="w-5 h-5 text-purple-500 mr-3" />
               <div>
                 <label className="text-sm font-medium text-gray-900">
-                  Retirement Date
+                  Retirement Date/Age
                 </label>
                 {isEditing ? (
                   <input
@@ -308,45 +231,9 @@ export const UserDataExtractor: React.FC<UserDataExtractorProps> = ({
                     className="block w-full mt-1 text-sm border border-gray-300 rounded px-2 py-1"
                   />
                 ) : (
-                  <div>
-                    <p className="text-sm text-gray-600">
-                      {extractedData.retirementDate
-                        ? formatRetirementDate(extractedData.retirementDate)
-                        : "Not provided"}
-                    </p>
-                    {extractedData.retirementDate &&
-                      extractedData.dateOfBirth && (
-                        <p className="text-xs text-purple-600 font-medium">
-                          Retirement Age:{" "}
-                          {(() => {
-                            try {
-                              const birthDate = new Date(
-                                extractedData.dateOfBirth
-                              )
-                              const retireDate = new Date(
-                                extractedData.retirementDate
-                              )
-                              let retirementAge =
-                                retireDate.getFullYear() -
-                                birthDate.getFullYear()
-                              const monthDiff =
-                                retireDate.getMonth() - birthDate.getMonth()
-                              if (
-                                monthDiff < 0 ||
-                                (monthDiff === 0 &&
-                                  retireDate.getDate() < birthDate.getDate())
-                              ) {
-                                retirementAge--
-                              }
-                              return retirementAge
-                            } catch {
-                              return "N/A"
-                            }
-                          })()}{" "}
-                          years old
-                        </p>
-                      )}
-                  </div>
+                  <p className="text-sm text-gray-600">
+                    {extractedData.retirementDate || "Not provided"}
+                  </p>
                 )}
               </div>
             </div>
@@ -363,7 +250,7 @@ export const UserDataExtractor: React.FC<UserDataExtractorProps> = ({
               <DollarSign className="w-5 h-5 text-green-500 mr-3" />
               <div>
                 <label className="text-sm font-medium text-gray-900">
-                  Saved Amount for Retirement
+                  Current Retirement Savings
                 </label>
                 {isEditing ? (
                   <input
@@ -381,9 +268,10 @@ export const UserDataExtractor: React.FC<UserDataExtractorProps> = ({
                 ) : (
                   <p className="text-sm text-gray-600">
                     {extractedData.currentRetirementSavings
-                      ? formatSavedAmount(
-                          extractedData.currentRetirementSavings
-                        )
+                      ? typeof extractedData.currentRetirementSavings ===
+                        "number"
+                        ? `$${extractedData.currentRetirementSavings.toLocaleString()}`
+                        : extractedData.currentRetirementSavings
                       : "Not provided"}
                   </p>
                 )}

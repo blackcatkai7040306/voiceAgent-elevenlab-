@@ -335,7 +335,7 @@ app.post('/api/follow-up-questions', async (req, res) => {
   }
 });
 
-app.post('/start-automation', async (req, res) => {
+app.post('/api/startautomation', async (req, res) => {
   try {
     console.log('Starting automation with data:', req.body);
     

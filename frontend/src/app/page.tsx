@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react"
 import { Bot, AlertCircle } from "lucide-react"
+import { useSearchParams } from "next/navigation"
 import { useSocket } from "@/hooks/useSocket"
 import { automationApi } from "@/lib/api"
 import { AutomationForm } from "@/components/AutomationForm"
@@ -15,7 +16,15 @@ import {
   ExtractedData,
 } from "@/types/automation"
 
+interface VoiceExtractedData {
+  firstName?: string
+  dateOfBirth?: string
+  retirementDate?: string
+  currentRetirementSavings?: string | number
+}
+
 export default function HomePage() {
+  const searchParams = useSearchParams()
   const {
     isConnected,
     progress,
@@ -29,35 +38,26 @@ export default function HomePage() {
   const [result, setResult] = useState<AutomationResult | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [extractedData, setExtractedData] = useState<ExtractedData>({})
-  const [voiceData, setVoiceData] = useState<{
-    birthday?: string
-    retirementDate?: string
-    savedAmount?: string
-    age?: string
-    retirementAge?: string
-    longevityEstimate?: string
-    investmentAmount?: string
-  }>({})
+  const [voiceData, setVoiceData] = useState<VoiceExtractedData | null>(null)
 
-  // Extract URL parameters from voice agent
+  // Extract voice data from URL parameters
   useEffect(() => {
-    const urlParams = new URLSearchParams(window.location.search)
-    const voiceParams = {
-      birthday: urlParams.get("birthday") || undefined,
-      retirementDate: urlParams.get("retirementDate") || undefined,
-      savedAmount: urlParams.get("savedAmount") || undefined,
-      age: urlParams.get("age") || undefined,
-      retirementAge: urlParams.get("retirementAge") || undefined,
-      longevityEstimate: urlParams.get("longevityEstimate") || undefined,
-      investmentAmount: urlParams.get("investmentAmount") || undefined,
-    }
+    const birthday = searchParams.get("birthday")
+    const retirementDate = searchParams.get("retirementDate")
+    const currentRetirementSavings = searchParams.get(
+      "currentRetirementSavings"
+    )
+    const firstName = searchParams.get("firstName")
 
-    // Only set if we have data
-    if (Object.values(voiceParams).some((value) => value !== undefined)) {
-      setVoiceData(voiceParams)
-      console.log("📊 Voice data received:", voiceParams)
+    if (birthday || retirementDate || currentRetirementSavings) {
+      setVoiceData({
+        firstName: firstName || undefined,
+        dateOfBirth: birthday || undefined,
+        retirementDate: retirementDate || undefined,
+        currentRetirementSavings: currentRetirementSavings || undefined,
+      })
     }
-  }, [])
+  }, [searchParams])
 
   // Process progress updates to extract data
   useEffect(() => {
@@ -204,7 +204,7 @@ export default function HomePage() {
               onStop={handleStopAutomation}
               status={status}
               isConnected={isConnected}
-              voiceData={voiceData}
+              voiceData={voiceData || undefined}
             />
 
             {/* Error Display */}

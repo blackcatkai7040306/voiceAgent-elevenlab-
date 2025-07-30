@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState } from "react"
+import React, { useState, useEffect } from "react"
 import {
   Play,
   Square,
@@ -10,23 +10,23 @@ import {
   Calendar,
   Clock,
   Cake,
+  User,
 } from "lucide-react"
 import { AutomationStatus, AutomationFormData } from "@/types/automation"
+
+interface VoiceExtractedData {
+  firstName?: string
+  dateOfBirth?: string
+  retirementDate?: string
+  currentRetirementSavings?: string | number
+}
 
 interface AutomationFormProps {
   onStart: (formData: AutomationFormData) => void
   onStop: () => void
   status: AutomationStatus
   isConnected: boolean
-  voiceData?: {
-    birthday?: string
-    retirementDate?: string
-    savedAmount?: string
-    age?: string
-    retirementAge?: string
-    longevityEstimate?: string
-    investmentAmount?: string
-  }
+  voiceData?: VoiceExtractedData
 }
 
 export const AutomationForm: React.FC<AutomationFormProps> = ({
@@ -39,27 +39,108 @@ export const AutomationForm: React.FC<AutomationFormProps> = ({
   const [formData, setFormData] = useState<AutomationFormData>({
     description: "Income Conductor automation workflow",
     sessionId: Date.now().toString(),
-    investmentAmount: voiceData?.investmentAmount || "130000",
-    retirementAge: voiceData?.retirementAge || "62",
-    longevityEstimate: voiceData?.longevityEstimate || "100",
-    birthday: voiceData?.birthday || "07/01/1967",
+    investmentAmount: "130000",
+    retirementAge: "62",
+    longevityEstimate: "100",
+    birthday: "07/01/1967",
   })
 
+  const [showAdvanced, setShowAdvanced] = useState(false)
+  const [calculatedAge, setCalculatedAge] = useState<number | null>(null)
+  const [calculatedRetirementAge, setCalculatedRetirementAge] = useState<
+    number | null
+  >(null)
+  const [displayRetirementDate, setDisplayRetirementDate] = useState<string>("")
+
+  // Helper function to calculate age from birthday
+  const calculateAge = (birthday: string): number => {
+    if (!birthday) return 0
+    const birthDate = new Date(birthday)
+    const today = new Date()
+    let age = today.getFullYear() - birthDate.getFullYear()
+    const monthDiff = today.getMonth() - birthDate.getMonth()
+    if (
+      monthDiff < 0 ||
+      (monthDiff === 0 && today.getDate() < birthDate.getDate())
+    ) {
+      age--
+    }
+    return age
+  }
+
+  // Helper function to calculate retirement age from birthday and retirement date
+  const calculateRetirementAge = (
+    birthday: string,
+    retirementDate: string
+  ): number => {
+    if (!birthday || !retirementDate) return 0
+    const birthDate = new Date(birthday)
+    const retireDate = new Date(retirementDate)
+    return retireDate.getFullYear() - birthDate.getFullYear()
+  }
+
+  // Helper function to format retirement date (add January if no month specified)
+  const formatRetirementDate = (retirementDate: string): string => {
+    if (!retirementDate) return ""
+
+    // If it's just a year (e.g., "2030"), add January 1st
+    if (retirementDate.match(/^\d{4}$/)) {
+      return `January 1, ${retirementDate}`
+    }
+
+    // If it's already a full date, format it nicely
+    try {
+      const date = new Date(retirementDate)
+      return date.toLocaleDateString("en-US", {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      })
+    } catch {
+      return retirementDate
+    }
+  }
+
   // Update form data when voice data changes
-  React.useEffect(() => {
-    if (voiceData && Object.keys(voiceData).length > 0) {
-      setFormData((prev) => ({
-        ...prev,
-        investmentAmount: voiceData.investmentAmount || prev.investmentAmount,
-        retirementAge: voiceData.retirementAge || prev.retirementAge,
-        longevityEstimate:
-          voiceData.longevityEstimate || prev.longevityEstimate,
-        birthday: voiceData.birthday || prev.birthday,
-      }))
+  useEffect(() => {
+    if (voiceData) {
+      const updates: Partial<AutomationFormData> = {}
+
+      // Set birthday and calculate age
+      if (voiceData.dateOfBirth) {
+        updates.birthday = voiceData.dateOfBirth
+        const age = calculateAge(voiceData.dateOfBirth)
+        setCalculatedAge(age)
+
+        // Calculate retirement age if we have retirement date
+        if (voiceData.retirementDate) {
+          const retirementAge = calculateRetirementAge(
+            voiceData.dateOfBirth,
+            voiceData.retirementDate
+          )
+          setCalculatedRetirementAge(retirementAge)
+          updates.retirementAge = retirementAge.toString()
+        }
+      }
+
+      // Set investment amount (saved amount)
+      if (voiceData.currentRetirementSavings) {
+        const amount =
+          typeof voiceData.currentRetirementSavings === "string"
+            ? voiceData.currentRetirementSavings.replace(/[^0-9]/g, "")
+            : voiceData.currentRetirementSavings.toString()
+        updates.investmentAmount = amount
+      }
+
+      // Format and display retirement date
+      if (voiceData.retirementDate) {
+        setDisplayRetirementDate(formatRetirementDate(voiceData.retirementDate))
+      }
+
+      // Update form data
+      setFormData((prev) => ({ ...prev, ...updates }))
     }
   }, [voiceData])
-
-  const [showAdvanced, setShowAdvanced] = useState(false)
 
   // Helper function to convert MM/DD/YYYY to YYYY-MM-DD for date input
   const formatDateForInput = (dateString: string): string => {
@@ -116,138 +197,195 @@ export const AutomationForm: React.FC<AutomationFormProps> = ({
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Voice Data Indicator */}
-        {voiceData && Object.keys(voiceData).length > 0 && (
-          <div className="bg-gradient-to-r from-green-50 to-emerald-50 p-4 rounded-lg border border-green-200">
-            <div className="flex items-center">
-              <div className="w-2 h-2 bg-green-500 rounded-full mr-3 animate-pulse"></div>
-              <div>
-                <h4 className="font-medium text-green-900">
-                  Data from Voice Agent
-                </h4>
-                <p className="text-sm text-green-700">
-                  The following information was extracted from your voice
-                  conversation:
-                  {voiceData.age && ` Age: ${voiceData.age} years old,`}
-                  {voiceData.retirementDate &&
-                    ` Retirement: ${voiceData.retirementDate},`}
-                  {voiceData.savedAmount && ` Saved: ${voiceData.savedAmount}`}
+        {/* Voice Extracted Data Display */}
+        {voiceData && (
+          <div className="bg-gradient-to-r from-green-50 to-emerald-50 p-6 rounded-xl border border-green-200 shadow-sm">
+            <h4 className="font-semibold text-gray-900 mb-6 flex items-center">
+              <User className="w-5 h-5 mr-2 text-green-600" />
+              Voice Agent Extracted Data
+            </h4>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {/* Current Age (Calculated) */}
+              <div className="bg-white p-4 rounded-lg border border-green-100">
+                <div className="flex items-center mb-2">
+                  <Cake className="w-4 h-4 text-green-600 mr-2" />
+                  <label className="text-sm font-medium text-gray-700">
+                    Current Age
+                  </label>
+                </div>
+                <div className="text-2xl font-bold text-green-700">
+                  {calculatedAge !== null
+                    ? `${calculatedAge} years old`
+                    : "Not calculated"}
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  Calculated from birthday:{" "}
+                  {voiceData.dateOfBirth || "Not provided"}
                 </p>
               </div>
+
+              {/* Retirement Date */}
+              <div className="bg-white p-4 rounded-lg border border-green-100">
+                <div className="flex items-center mb-2">
+                  <Calendar className="w-4 h-4 text-green-600 mr-2" />
+                  <label className="text-sm font-medium text-gray-700">
+                    Retirement Date
+                  </label>
+                </div>
+                <div className="text-lg font-bold text-green-700">
+                  {displayRetirementDate ||
+                    voiceData.retirementDate ||
+                    "Not provided"}
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  {calculatedRetirementAge !== null &&
+                    `Age ${calculatedRetirementAge} at retirement`}
+                </p>
+              </div>
+
+              {/* Saved Amount */}
+              <div className="bg-white p-4 rounded-lg border border-green-100">
+                <div className="flex items-center mb-2">
+                  <DollarSign className="w-4 h-4 text-green-600 mr-2" />
+                  <label className="text-sm font-medium text-gray-700">
+                    Current Savings
+                  </label>
+                </div>
+                <div className="text-2xl font-bold text-green-700">
+                  {voiceData.currentRetirementSavings
+                    ? `$${
+                        typeof voiceData.currentRetirementSavings === "string"
+                          ? parseInt(
+                              voiceData.currentRetirementSavings.replace(
+                                /[^0-9]/g,
+                                ""
+                              )
+                            ).toLocaleString()
+                          : voiceData.currentRetirementSavings.toLocaleString()
+                      }`
+                    : "Not provided"}
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  Amount saved for retirement
+                </p>
+              </div>
+            </div>
+
+            {/* Calculated Values Note */}
+            <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+              <p className="text-sm text-blue-800">
+                <strong>Automation Values:</strong> Retirement Age (
+                {calculatedRetirementAge || "TBD"}), Longevity Estimate (100),
+                Birthday ({voiceData.dateOfBirth || "TBD"}), and Investment
+                Amount ($
+                {formData.investmentAmount
+                  ? parseInt(formData.investmentAmount).toLocaleString()
+                  : "TBD"}
+                ) will be automatically input during browser automation.
+              </p>
             </div>
           </div>
         )}
 
-        {/* Investment Configuration Section */}
-        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-6 rounded-xl border border-blue-200 shadow-sm">
-          <h4 className="font-semibold text-gray-900 mb-6 flex items-center">
-            <DollarSign className="w-5 h-5 mr-2 text-blue-600" />
-            Investment & Personal Configuration
-          </h4>
+        {/* Manual Input Fallback (when no voice data) */}
+        {!voiceData && (
+          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-6 rounded-xl border border-blue-200 shadow-sm">
+            <h4 className="font-semibold text-gray-900 mb-6 flex items-center">
+              <DollarSign className="w-5 h-5 mr-2 text-blue-600" />
+              Manual Input Configuration
+            </h4>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Row 1 */}
-            <div className="space-y-2">
-              <label className="block text-sm font-medium text-gray-700 mb-3">
-                Investment Amount ($)
-              </label>
-              <input
-                type="number"
-                value={formData.investmentAmount}
-                onChange={(e) =>
-                  handleInputChange("investmentAmount", e.target.value)
-                }
-                className="input-field text-lg font-semibold h-12 px-4"
-                placeholder="130000"
-                min="1000"
-                step="1000"
-                disabled={isRunning}
-                required
-              />
-              <p className="text-xs text-gray-500 mt-2 leading-relaxed">
-                Initial investment amount
-              </p>
-            </div>
-
-            <div className="space-y-2">
-              <label className="block text-sm font-medium text-gray-700 mb-3">
-                Date of Birth
-              </label>
-              <div className="relative">
-                <Cake className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 transform -translate-y-1/2" />
-                <input
-                  type="date"
-                  value={formatDateForInput(formData.birthday)}
-                  onChange={(e) =>
-                    handleInputChange(
-                      "birthday",
-                      formatDateForStorage(e.target.value)
-                    )
-                  }
-                  className="input-field pl-10 text-lg font-semibold h-12"
-                  min="1900-01-01"
-                  max="2010-12-31"
-                  disabled={isRunning}
-                  required
-                />
-              </div>
-              <p className="text-xs text-gray-500 mt-2 leading-relaxed">
-                Select your date of birth
-              </p>
-            </div>
-
-            {/* Row 2 */}
-            <div className="space-y-2">
-              <label className="block text-sm font-medium text-gray-700 mb-3">
-                Retirement Age
-              </label>
-              <div className="relative">
-                <Calendar className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 transform -translate-y-1/2" />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-gray-700 mb-3">
+                  Investment Amount ($)
+                </label>
                 <input
                   type="number"
-                  value={formData.retirementAge}
+                  value={formData.investmentAmount}
                   onChange={(e) =>
-                    handleInputChange("retirementAge", e.target.value)
+                    handleInputChange("investmentAmount", e.target.value)
                   }
-                  className="input-field pl-10 text-lg font-semibold h-12"
-                  placeholder="62"
-                  min="50"
-                  max="80"
+                  className="input-field text-lg font-semibold h-12 px-4"
+                  placeholder="130000"
+                  min="1000"
+                  step="1000"
                   disabled={isRunning}
                   required
                 />
               </div>
-              <p className="text-xs text-gray-500 mt-2 leading-relaxed">
-                Target retirement age
-              </p>
-            </div>
 
-            <div className="space-y-2">
-              <label className="block text-sm font-medium text-gray-700 mb-3">
-                Longevity Estimate
-              </label>
-              <div className="relative">
-                <Clock className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 transform -translate-y-1/2" />
-                <input
-                  type="number"
-                  value={formData.longevityEstimate}
-                  onChange={(e) =>
-                    handleInputChange("longevityEstimate", e.target.value)
-                  }
-                  className="input-field pl-10 text-lg font-semibold h-12"
-                  placeholder="100"
-                  min="70"
-                  max="120"
-                  disabled={isRunning}
-                  required
-                />
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-gray-700 mb-3">
+                  Date of Birth
+                </label>
+                <div className="relative">
+                  <Cake className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 transform -translate-y-1/2" />
+                  <input
+                    type="date"
+                    value={formatDateForInput(formData.birthday)}
+                    onChange={(e) =>
+                      handleInputChange(
+                        "birthday",
+                        formatDateForStorage(e.target.value)
+                      )
+                    }
+                    className="input-field pl-10 text-lg font-semibold h-12"
+                    min="1900-01-01"
+                    max="2010-12-31"
+                    disabled={isRunning}
+                    required
+                  />
+                </div>
               </div>
-              <p className="text-xs text-gray-500 mt-2 leading-relaxed">
-                Expected life span
-              </p>
+
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-gray-700 mb-3">
+                  Retirement Age
+                </label>
+                <div className="relative">
+                  <Calendar className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 transform -translate-y-1/2" />
+                  <input
+                    type="number"
+                    value={formData.retirementAge}
+                    onChange={(e) =>
+                      handleInputChange("retirementAge", e.target.value)
+                    }
+                    className="input-field pl-10 text-lg font-semibold h-12"
+                    placeholder="62"
+                    min="50"
+                    max="80"
+                    disabled={isRunning}
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-gray-700 mb-3">
+                  Longevity Estimate
+                </label>
+                <div className="relative">
+                  <Clock className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 transform -translate-y-1/2" />
+                  <input
+                    type="number"
+                    value={formData.longevityEstimate}
+                    onChange={(e) =>
+                      handleInputChange("longevityEstimate", e.target.value)
+                    }
+                    className="input-field pl-10 text-lg font-semibold h-12"
+                    placeholder="100"
+                    min="70"
+                    max="120"
+                    disabled={isRunning}
+                    required
+                  />
+                </div>
+              </div>
             </div>
           </div>
-        </div>
+        )}
 
         {/* Basic Settings */}
         <div className="space-y-3">
