@@ -17,7 +17,7 @@ export default function AgentPage() {
 
     // Check if all required data is present
     const isComplete =
-      data.dateOfBirth && data.retirementAge && data.longevityEstimate
+      data.dateOfBirth && data.retirementDate && data.currentRetirementSavings
     setIsDataComplete(!!isComplete)
   }
 
@@ -25,8 +25,9 @@ export default function AgentPage() {
     // Navigate to main automation page with extracted data
     const params = new URLSearchParams({
       birthday: extractedData.dateOfBirth || "",
-      retirementAge: extractedData.retirementAge?.toString() || "",
-      longevityEstimate: extractedData.longevityEstimate?.toString() || "",
+      retirementDate: extractedData.retirementDate || "",
+      currentRetirementSavings:
+        extractedData.currentRetirementSavings?.toString() || "",
     })
 
     window.location.href = `/?${params.toString()}`

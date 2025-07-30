@@ -58,7 +58,7 @@ export const UserDataExtractor: React.FC<UserDataExtractorProps> = ({
   }
 
   const completionPercentage = () => {
-    const fields = ["dateOfBirth", "retirementAge", "longevityEstimate"]
+    const fields = ["dateOfBirth", "retirementDate", "currentRetirementSavings"]
     const filledFields = fields.filter(
       (field) => extractedData[field as keyof ExtractedUserData]
     )
@@ -137,6 +137,43 @@ export const UserDataExtractor: React.FC<UserDataExtractorProps> = ({
         </div>
 
         <div className="p-6 space-y-4">
+          {/* First Name */}
+          {extractedData.firstName && (
+            <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+              <div className="flex items-center">
+                <User className="w-5 h-5 text-indigo-500 mr-3" />
+                <div>
+                  <label className="text-sm font-medium text-gray-900">
+                    First Name
+                  </label>
+                  {isEditing ? (
+                    <input
+                      type="text"
+                      value={editedData.firstName || ""}
+                      onChange={(e) =>
+                        setEditedData({
+                          ...editedData,
+                          firstName: e.target.value,
+                        })
+                      }
+                      placeholder="Your first name"
+                      className="block w-full mt-1 text-sm border border-gray-300 rounded px-2 py-1"
+                    />
+                  ) : (
+                    <p className="text-sm text-gray-600">
+                      {extractedData.firstName || "Not provided"}
+                    </p>
+                  )}
+                </div>
+              </div>
+              <div
+                className={`w-3 h-3 rounded-full ${
+                  extractedData.firstName ? "bg-green-500" : "bg-gray-300"
+                }`}
+              />
+            </div>
+          )}
+
           {/* Date of Birth */}
           <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
             <div className="flex items-center">
@@ -172,72 +209,69 @@ export const UserDataExtractor: React.FC<UserDataExtractorProps> = ({
             />
           </div>
 
-          {/* Retirement Age */}
+          {/* Retirement Date */}
           <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
             <div className="flex items-center">
               <Clock className="w-5 h-5 text-purple-500 mr-3" />
               <div>
                 <label className="text-sm font-medium text-gray-900">
-                  Retirement Age
+                  Retirement Date/Age
                 </label>
                 {isEditing ? (
                   <input
-                    type="number"
-                    value={editedData.retirementAge || ""}
+                    type="text"
+                    value={editedData.retirementDate || ""}
                     onChange={(e) =>
                       setEditedData({
                         ...editedData,
-                        retirementAge: parseInt(e.target.value),
+                        retirementDate: e.target.value,
                       })
                     }
-                    placeholder="e.g., 65"
-                    min="50"
-                    max="80"
+                    placeholder="e.g., 65 years old or MM/DD/YYYY"
                     className="block w-full mt-1 text-sm border border-gray-300 rounded px-2 py-1"
                   />
                 ) : (
                   <p className="text-sm text-gray-600">
-                    {extractedData.retirementAge
-                      ? `${extractedData.retirementAge} years old`
-                      : "Not provided"}
+                    {extractedData.retirementDate || "Not provided"}
                   </p>
                 )}
               </div>
             </div>
             <div
               className={`w-3 h-3 rounded-full ${
-                extractedData.retirementAge ? "bg-green-500" : "bg-gray-300"
+                extractedData.retirementDate ? "bg-green-500" : "bg-gray-300"
               }`}
             />
           </div>
 
-          {/* Longevity Estimate */}
+          {/* Current Retirement Savings */}
           <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
             <div className="flex items-center">
-              <User className="w-5 h-5 text-green-500 mr-3" />
+              <DollarSign className="w-5 h-5 text-green-500 mr-3" />
               <div>
                 <label className="text-sm font-medium text-gray-900">
-                  Longevity Estimate
+                  Current Retirement Savings
                 </label>
                 {isEditing ? (
                   <input
-                    type="number"
-                    value={editedData.longevityEstimate || ""}
+                    type="text"
+                    value={editedData.currentRetirementSavings || ""}
                     onChange={(e) =>
                       setEditedData({
                         ...editedData,
-                        longevityEstimate: parseInt(e.target.value),
+                        currentRetirementSavings: e.target.value,
                       })
                     }
-                    placeholder="e.g., 90"
-                    min="70"
-                    max="120"
+                    placeholder="e.g., $50,000"
                     className="block w-full mt-1 text-sm border border-gray-300 rounded px-2 py-1"
                   />
                 ) : (
                   <p className="text-sm text-gray-600">
-                    {extractedData.longevityEstimate
-                      ? `${extractedData.longevityEstimate} years old`
+                    {extractedData.currentRetirementSavings
+                      ? typeof extractedData.currentRetirementSavings ===
+                        "number"
+                        ? `$${extractedData.currentRetirementSavings.toLocaleString()}`
+                        : extractedData.currentRetirementSavings
                       : "Not provided"}
                   </p>
                 )}
@@ -245,44 +279,12 @@ export const UserDataExtractor: React.FC<UserDataExtractorProps> = ({
             </div>
             <div
               className={`w-3 h-3 rounded-full ${
-                extractedData.longevityEstimate ? "bg-green-500" : "bg-gray-300"
+                extractedData.currentRetirementSavings
+                  ? "bg-green-500"
+                  : "bg-gray-300"
               }`}
             />
           </div>
-
-          {/* Investment Amount (Optional) */}
-          {extractedData.investmentAmount && (
-            <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-              <div className="flex items-center">
-                <DollarSign className="w-5 h-5 text-yellow-500 mr-3" />
-                <div>
-                  <label className="text-sm font-medium text-gray-900">
-                    Investment Amount
-                  </label>
-                  {isEditing ? (
-                    <input
-                      type="number"
-                      value={editedData.investmentAmount || ""}
-                      onChange={(e) =>
-                        setEditedData({
-                          ...editedData,
-                          investmentAmount: parseInt(e.target.value),
-                        })
-                      }
-                      placeholder="e.g., 130000"
-                      min="1000"
-                      className="block w-full mt-1 text-sm border border-gray-300 rounded px-2 py-1"
-                    />
-                  ) : (
-                    <p className="text-sm text-gray-600">
-                      ${extractedData.investmentAmount?.toLocaleString()}
-                    </p>
-                  )}
-                </div>
-              </div>
-              <div className="w-3 h-3 rounded-full bg-green-500" />
-            </div>
-          )}
 
           {/* Save Button for Editing */}
           {isEditing && (
@@ -313,9 +315,11 @@ export const UserDataExtractor: React.FC<UserDataExtractorProps> = ({
               </p>
               <ul className="text-sm text-yellow-700 mt-2 space-y-1">
                 {!extractedData.dateOfBirth && <li>• Date of Birth</li>}
-                {!extractedData.retirementAge && <li>• Retirement Age</li>}
-                {!extractedData.longevityEstimate && (
-                  <li>• Longevity Estimate</li>
+                {!extractedData.retirementDate && (
+                  <li>• Retirement Date/Age</li>
+                )}
+                {!extractedData.currentRetirementSavings && (
+                  <li>• Current Retirement Savings</li>
                 )}
               </ul>
             </div>

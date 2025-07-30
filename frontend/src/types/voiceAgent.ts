@@ -1,20 +1,8 @@
 export interface ExtractedUserData {
+  firstName?: string
   dateOfBirth?: string
-  age?: number
-  retirementAge?: number
-  longevityEstimate?: number | string
-  currentIncome?: number | string
-  monthlyExpenses?: number | string
-  currentSavings?: number | string
-  investmentAmount?: number
-  investmentGoals?: string
-  riskTolerance?: string
-  familyStatus?: string
-  dependents?: number | string
-  healthFactors?: string
-  additionalInfo?: {
-    [key: string]: any
-  }
+  retirementDate?: string
+  currentRetirementSavings?: string | number
 }
 
 export interface VoiceAgentProps {
