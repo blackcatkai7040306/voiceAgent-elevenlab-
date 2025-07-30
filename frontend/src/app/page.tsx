@@ -5,7 +5,7 @@ import { Bot, AlertCircle } from "lucide-react"
 import { useSearchParams } from "next/navigation"
 import { useSocket } from "@/hooks/useSocket"
 import { automationApi } from "@/lib/api"
-import { AutomationForm } from "@/components/AutomationForm"
+import { VoiceDataDisplay } from "@/components/VoiceDataDisplay"
 import { ProgressTracker } from "@/components/ProgressTracker"
 import { StatusIndicator } from "@/components/StatusIndicator"
 import { ResultsDisplay } from "@/components/ResultsDisplay"
@@ -198,8 +198,8 @@ export default function HomePage() {
               onReconnect={reconnect}
             />
 
-            {/* Automation Form */}
-            <AutomationForm
+            {/* Voice Data Display */}
+            <VoiceDataDisplay
               onStart={handleStartAutomation}
               onStop={handleStopAutomation}
               status={status}

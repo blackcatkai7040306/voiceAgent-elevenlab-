@@ -79,15 +79,15 @@ export const useSocket = () => {
 
     // Initialize socket connection with fallback strategy
     socketRef.current = io(socketUrl, {
-      // Force polling for HTTPS sites when WSS is not available
-      transports:
-        window.location.protocol === "https:"
-          ? ["polling"]
-          : ["websocket", "polling"],
-      upgrade: false, // Disable upgrade to WebSocket for HTTPS
+      // Force polling for better reliability
+      transports: ["polling"],
+      upgrade: false, // Disable upgrade to WebSocket
       rememberUpgrade: false,
-      timeout: 20000,
+      timeout: 10000, // Reduced timeout
       forceNew: true,
+      reconnection: true,
+      reconnectionAttempts: 3,
+      reconnectionDelay: 1000,
       // Add HTTPS-specific options
       secure: window.location.protocol === "https:",
       rejectUnauthorized: false, // For development with self-signed certificates

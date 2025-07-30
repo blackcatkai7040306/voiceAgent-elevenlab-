@@ -19,7 +19,7 @@ export const automationApi = {
   ): Promise<AutomationResponse> {
     try {
       const response = await apiClient.post<AutomationResponse>(
-        "/start-automation",
+        "/api/start-automation",
         formData
       )
       return response.data
