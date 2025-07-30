@@ -659,12 +659,17 @@ async function runAutomation(formData, io = null) {
       
       // Select retirement month
       const retirementMonth = formData.retirementMonth || '1';
+      console.log(`🗓️ Retirement Month/Year data received:`, {
+        retirementMonth: formData.retirementMonth,
+        retirementYear: formData.retirementYear,
+        allFormData: formData
+      });
       console.log(`Selecting retirement month: ${retirementMonth}`);
       
       try {
         const monthSelect = await page.$('select[name="client_retirement_month"]');
         if (monthSelect) {
-          await monthSelect.selectOption({ value: retirementMonth });
+          await page.select('select[name="client_retirement_month"]', retirementMonth);
           console.log(`Retirement month selected successfully: ${retirementMonth}`);
         } else {
           console.log('Retirement month select not found');
@@ -682,7 +687,7 @@ async function runAutomation(formData, io = null) {
       try {
         const yearSelect = await page.$('select[name="client_retirement_year"]');
         if (yearSelect) {
-          await yearSelect.selectOption({ value: retirementYear });
+          await page.select('select[name="client_retirement_year"]', retirementYear);
           console.log(`Retirement year selected successfully: ${retirementYear}`);
         } else {
           console.log('Retirement year select not found');

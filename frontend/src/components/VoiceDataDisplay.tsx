@@ -57,18 +57,29 @@ export const VoiceDataDisplay: React.FC<VoiceDataDisplayProps> = ({
     retirementDate: string,
     birthday?: string
   ): { month: string; year: string } => {
-    if (!retirementDate) return { month: "1", year: "2030" } // Default values
+    console.log("🔧 extractRetirementMonthYear called with:", {
+      retirementDate,
+      birthday,
+    })
+
+    if (!retirementDate) {
+      console.log("❌ No retirement date provided, using defaults")
+      return { month: "1", year: "2030" } // Default values
+    }
 
     const dateStr = retirementDate.trim()
+    console.log("📋 Processing date string:", dateStr)
 
     // Handle year only (e.g., "2030")
     if (dateStr.match(/^\d{4}$/)) {
+      console.log("✅ Detected year-only format:", dateStr)
       return { month: "1", year: dateStr } // Default to January
     }
 
-    // Handle month/year (e.g., "06/2030")
+    // Handle month/year (e.g., "06/2030", "6/2030")
     if (dateStr.match(/^\d{1,2}\/\d{4}$/)) {
       const [month, year] = dateStr.split("/")
+      console.log("✅ Detected month/year format:", { month, year })
       return { month: month, year: year }
     }
 
@@ -78,31 +89,51 @@ export const VoiceDataDisplay: React.FC<VoiceDataDisplayProps> = ({
       parseInt(dateStr) >= 50 &&
       parseInt(dateStr) <= 100
     ) {
+      console.log("✅ Detected age format:", dateStr)
       if (birthday) {
         try {
           const birthDate = new Date(birthday)
           const targetAge = parseInt(dateStr)
           const retirementYear = birthDate.getFullYear() + targetAge
+          console.log("🎯 Calculated retirement year from age:", {
+            birthday,
+            targetAge,
+            birthYear: birthDate.getFullYear(),
+            retirementYear,
+          })
           return { month: "1", year: retirementYear.toString() } // Default to January
-        } catch {
+        } catch (error) {
+          console.log("❌ Error calculating year from birthday:", error)
           // Fallback
         }
       }
       // If no birthday or calculation failed, estimate
       const currentYear = new Date().getFullYear()
       const estimatedRetirementYear = currentYear + parseInt(dateStr) - 30 // Rough estimate
+      console.log("⚠️ No birthday, estimating retirement year:", {
+        currentYear,
+        age: parseInt(dateStr),
+        estimatedRetirementYear,
+      })
       return { month: "1", year: estimatedRetirementYear.toString() }
     }
 
-    // Handle descriptive with age (e.g., "age 65")
-    const ageMatch = dateStr.match(/age\s*(\d{1,2})/i)
+    // Handle descriptive with age (e.g., "age 65", "at age 62")
+    const ageMatch = dateStr.match(/(?:age|at age)\s*(\d{1,2})/i)
     if (ageMatch && birthday) {
+      console.log("✅ Detected descriptive age format:", ageMatch[1])
       try {
         const birthDate = new Date(birthday)
         const targetAge = parseInt(ageMatch[1])
         const retirementYear = birthDate.getFullYear() + targetAge
+        console.log("🎯 Calculated retirement year from descriptive age:", {
+          birthday,
+          targetAge,
+          retirementYear,
+        })
         return { month: "1", year: retirementYear.toString() }
-      } catch {
+      } catch (error) {
+        console.log("❌ Error calculating year from descriptive age:", error)
         // Fallback
       }
     }
@@ -113,6 +144,11 @@ export const VoiceDataDisplay: React.FC<VoiceDataDisplayProps> = ({
       const yearsFromNow = parseInt(yearsMatch[1])
       const currentYear = new Date().getFullYear()
       const retirementYear = currentYear + yearsFromNow
+      console.log("✅ Detected 'in X years' format:", {
+        yearsFromNow,
+        currentYear,
+        retirementYear,
+      })
       return { month: "1", year: retirementYear.toString() }
     }
 
@@ -124,16 +160,18 @@ export const VoiceDataDisplay: React.FC<VoiceDataDisplayProps> = ({
         date.getFullYear() > 1900 &&
         date.getFullYear() < 2100
       ) {
-        return {
-          month: (date.getMonth() + 1).toString(),
-          year: date.getFullYear().toString(),
-        }
+        const month = (date.getMonth() + 1).toString()
+        const year = date.getFullYear().toString()
+        console.log("✅ Parsed as full date:", { dateStr, month, year })
+        return { month, year }
       }
-    } catch {
+    } catch (error) {
+      console.log("❌ Error parsing as full date:", error)
       // Continue to fallback
     }
 
     // Default fallback
+    console.log("⚠️ Using default fallback values")
     return { month: "1", year: "2030" }
   }
 
@@ -314,7 +352,7 @@ export const VoiceDataDisplay: React.FC<VoiceDataDisplayProps> = ({
       }
 
       // Calculate retirement age - handle different scenarios
-      if (voiceData.retirementDate) {
+      if (voiceData.retirementDate && voiceData.retirementDate.trim()) {
         let retirementAge = 0
 
         console.log("🔢 Calculating retirement age:", {
@@ -374,8 +412,15 @@ export const VoiceDataDisplay: React.FC<VoiceDataDisplayProps> = ({
 
         // Format and display retirement date
         setDisplayRetirementDate(formatRetirementDate(voiceData.retirementDate))
+      }
 
-        // Extract retirement month and year
+      // Extract retirement month and year (moved outside to ensure it always runs)
+      if (voiceData.retirementDate && voiceData.retirementDate.trim()) {
+        console.log("🔍 DEBUG: About to extract month/year from:", {
+          retirementDate: voiceData.retirementDate,
+          dateOfBirth: voiceData.dateOfBirth,
+        })
+
         const { month, year } = extractRetirementMonthYear(
           voiceData.retirementDate,
           voiceData.dateOfBirth
@@ -383,7 +428,11 @@ export const VoiceDataDisplay: React.FC<VoiceDataDisplayProps> = ({
         updates.retirementMonth = month
         updates.retirementYear = year
 
-        console.log("📅 Extracted retirement month/year:", { month, year })
+        console.log("📅 Extracted retirement month/year:", {
+          month,
+          year,
+          originalRetirementDate: voiceData.retirementDate,
+        })
       }
 
       // Set investment amount (saved amount)
@@ -411,6 +460,11 @@ export const VoiceDataDisplay: React.FC<VoiceDataDisplayProps> = ({
         calculatedAge,
         calculatedRetirementAge,
         voiceData,
+        retirementMonthYear: {
+          month: formData.retirementMonth,
+          year: formData.retirementYear,
+          originalRetirementDate: voiceData?.retirementDate,
+        },
       })
       onStart(formData)
     }
