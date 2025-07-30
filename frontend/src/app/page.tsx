@@ -156,13 +156,20 @@ export default function HomePage() {
   }
 
   const handleContinueVoiceChat = () => {
-    // Navigate back to agent page with completion status
+    // Navigate back to agent page with any extracted data
     const params = new URLSearchParams({
-      automationCompleted: "true",
+      // Include automation status
+      automationCompleted: (status === "completed").toString(),
+      // Include any extracted data we have
       monthlyIncome: extractedData.monthlyIncomeNet?.toString() || "",
       planValue1: extractedData.planValues?.value1?.toString() || "",
       planValue2: extractedData.planValues?.value2?.toString() || "",
       planValue3: extractedData.planValues?.value3?.toString() || "",
+      // Include progress data
+      currentStep: currentStep || "",
+      lastProgressMessage: progress[progress.length - 1]?.message || "",
+      // Include any errors that occurred
+      hadError: (status === "error").toString(),
     })
     window.location.href = `/agent?${params.toString()}`
   }
