@@ -16,8 +16,14 @@ import {
 } from "@/types/automation"
 
 export default function HomePage() {
-  const { isConnected, progress, currentStep, clearProgress, reconnect } =
-    useSocket()
+  const {
+    isConnected,
+    progress,
+    currentStep,
+    connectionError,
+    clearProgress,
+    reconnect,
+  } = useSocket()
   const [status, setStatus] = useState<AutomationStatus>("idle")
   const [result, setResult] = useState<AutomationResult | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -158,6 +164,7 @@ export default function HomePage() {
             <StatusIndicator
               isConnected={isConnected}
               status={status}
+              connectionError={connectionError}
               onReconnect={reconnect}
             />
 
