@@ -655,6 +655,42 @@ async function runAutomation(formData, io = null) {
         console.log('Longevity field not found');
       }
       
+      await wait(500);
+      
+      // Select retirement month
+      const retirementMonth = formData.retirementMonth || '1';
+      console.log(`Selecting retirement month: ${retirementMonth}`);
+      
+      try {
+        const monthSelect = await page.$('select[name="client_retirement_month"]');
+        if (monthSelect) {
+          await monthSelect.selectOption({ value: retirementMonth });
+          console.log(`Retirement month selected successfully: ${retirementMonth}`);
+        } else {
+          console.log('Retirement month select not found');
+        }
+      } catch (error) {
+        console.log('Could not select retirement month:', error.message);
+      }
+      
+      await wait(500);
+      
+      // Select retirement year
+      const retirementYear = formData.retirementYear || '2030';
+      console.log(`Selecting retirement year: ${retirementYear}`);
+      
+      try {
+        const yearSelect = await page.$('select[name="client_retirement_year"]');
+        if (yearSelect) {
+          await yearSelect.selectOption({ value: retirementYear });
+          console.log(`Retirement year selected successfully: ${retirementYear}`);
+        } else {
+          console.log('Retirement year select not found');
+        }
+      } catch (error) {
+        console.log('Could not select retirement year:', error.message);
+      }
+      
       await wait(1000);
       
     } catch (error) {

@@ -48,7 +48,94 @@ export const VoiceDataDisplay: React.FC<VoiceDataDisplayProps> = ({
     retirementAge: "62",
     longevityEstimate: "100",
     birthday: "07/01/1967",
+    retirementMonth: "1",
+    retirementYear: "2030",
   })
+
+  // Helper function to extract retirement month and year from retirement date
+  const extractRetirementMonthYear = (
+    retirementDate: string,
+    birthday?: string
+  ): { month: string; year: string } => {
+    if (!retirementDate) return { month: "1", year: "2030" } // Default values
+
+    const dateStr = retirementDate.trim()
+
+    // Handle year only (e.g., "2030")
+    if (dateStr.match(/^\d{4}$/)) {
+      return { month: "1", year: dateStr } // Default to January
+    }
+
+    // Handle month/year (e.g., "06/2030")
+    if (dateStr.match(/^\d{1,2}\/\d{4}$/)) {
+      const [month, year] = dateStr.split("/")
+      return { month: month, year: year }
+    }
+
+    // Handle age (e.g., "65") - calculate year from birthday
+    if (
+      dateStr.match(/^\d{1,2}$/) &&
+      parseInt(dateStr) >= 50 &&
+      parseInt(dateStr) <= 100
+    ) {
+      if (birthday) {
+        try {
+          const birthDate = new Date(birthday)
+          const targetAge = parseInt(dateStr)
+          const retirementYear = birthDate.getFullYear() + targetAge
+          return { month: "1", year: retirementYear.toString() } // Default to January
+        } catch {
+          // Fallback
+        }
+      }
+      // If no birthday or calculation failed, estimate
+      const currentYear = new Date().getFullYear()
+      const estimatedRetirementYear = currentYear + parseInt(dateStr) - 30 // Rough estimate
+      return { month: "1", year: estimatedRetirementYear.toString() }
+    }
+
+    // Handle descriptive with age (e.g., "age 65")
+    const ageMatch = dateStr.match(/age\s*(\d{1,2})/i)
+    if (ageMatch && birthday) {
+      try {
+        const birthDate = new Date(birthday)
+        const targetAge = parseInt(ageMatch[1])
+        const retirementYear = birthDate.getFullYear() + targetAge
+        return { month: "1", year: retirementYear.toString() }
+      } catch {
+        // Fallback
+      }
+    }
+
+    // Handle "in X years"
+    const yearsMatch = dateStr.match(/in\s*(\d+)\s*years?/i)
+    if (yearsMatch) {
+      const yearsFromNow = parseInt(yearsMatch[1])
+      const currentYear = new Date().getFullYear()
+      const retirementYear = currentYear + yearsFromNow
+      return { month: "1", year: retirementYear.toString() }
+    }
+
+    // Try to parse as a full date
+    try {
+      const date = new Date(dateStr)
+      if (
+        !isNaN(date.getTime()) &&
+        date.getFullYear() > 1900 &&
+        date.getFullYear() < 2100
+      ) {
+        return {
+          month: (date.getMonth() + 1).toString(),
+          year: date.getFullYear().toString(),
+        }
+      }
+    } catch {
+      // Continue to fallback
+    }
+
+    // Default fallback
+    return { month: "1", year: "2030" }
+  }
 
   // Helper function to calculate age from birthday
   const calculateAge = (birthday: string): number => {
@@ -287,6 +374,16 @@ export const VoiceDataDisplay: React.FC<VoiceDataDisplayProps> = ({
 
         // Format and display retirement date
         setDisplayRetirementDate(formatRetirementDate(voiceData.retirementDate))
+
+        // Extract retirement month and year
+        const { month, year } = extractRetirementMonthYear(
+          voiceData.retirementDate,
+          voiceData.dateOfBirth
+        )
+        updates.retirementMonth = month
+        updates.retirementYear = year
+
+        console.log("📅 Extracted retirement month/year:", { month, year })
       }
 
       // Set investment amount (saved amount)

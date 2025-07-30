@@ -7,6 +7,8 @@ export interface AutomationFormData {
   retirementAge: string
   longevityEstimate: string
   birthday: string
+  retirementMonth?: string
+  retirementYear?: string
   [key: string]: any
 }
 
