@@ -2,28 +2,8 @@ import axios from "axios"
 import { AutomationFormData, AutomationResponse } from "@/types/automation"
 
 // Determine API base URL with fallback logic
-const getApiBaseUrl = () => {
-  // Check if we're in development
-  if (process.env.NODE_ENV === "development") {
-    return "http://localhost:3001"
-  }
 
-  // Use environment variable if available
-  if (process.env.NEXT_PUBLIC_SERVER_URL) {
-    let url = process.env.NEXT_PUBLIC_SERVER_URL
-    // Remove trailing /api if present (common mistake)
-    if (url.endsWith("/api")) {
-      url = url.slice(0, -4)
-      console.log("⚠️ Removed /api suffix from NEXT_PUBLIC_SERVER_URL:", url)
-    }
-    return url
-  }
-
-  // Fallback for production
-  return "https://autoincome.theretirementpaycheck.com"
-}
-
-const API_BASE_URL = getApiBaseUrl()
+const API_BASE_URL = process.env.NEXT_PUBLIC_SERVER_URL
 
 console.log("API_BASE_URL:", API_BASE_URL) // Debug log
 console.log("Environment:", process.env.NODE_ENV) // Debug log
