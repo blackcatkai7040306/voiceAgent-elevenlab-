@@ -1,7 +1,7 @@
 import axios from "axios"
 import { AutomationFormData, AutomationResponse } from "@/types/automation"
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL
+const API_BASE_URL = process.env.NEXT_PUBLIC_SERVER_URL
 
 console.log("API_BASE_URL:", API_BASE_URL) // Debug log
 
