@@ -180,7 +180,7 @@ export const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
               Restart Automation
             </button>
           )}
-        </div>}
+        </div>
       </div>
     </div>
   )
