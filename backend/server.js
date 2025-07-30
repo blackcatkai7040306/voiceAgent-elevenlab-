@@ -40,14 +40,26 @@ const PORT = 3001;
 app.use(cors({
   origin: [
     'http://localhost:3000',
+    'http://localhost:3001',
     'https://voice-agent-elevenlab.vercel.app',
     'https://autoincome.theretirementpaycheck.com',
     'https://theretirementpaycheck.com'
   ],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  optionsSuccessStatus: 200 // Some legacy browsers choke on 204
 }));
+
+// Add explicit OPTIONS handler for preflight requests
+app.options('*', cors());
+
+// Debug middleware to log all requests
+app.use((req, res, next) => {
+  console.log(`📡 ${req.method} ${req.path} from ${req.get('Origin') || 'unknown origin'}`);
+  next();
+});
+
 app.use(express.json());
 
 // Configure multer for audio file uploads

@@ -10,7 +10,13 @@ const getApiBaseUrl = () => {
 
   // Use environment variable if available
   if (process.env.NEXT_PUBLIC_SERVER_URL) {
-    return process.env.NEXT_PUBLIC_SERVER_URL
+    let url = process.env.NEXT_PUBLIC_SERVER_URL
+    // Remove trailing /api if present (common mistake)
+    if (url.endsWith("/api")) {
+      url = url.slice(0, -4)
+      console.log("⚠️ Removed /api suffix from NEXT_PUBLIC_SERVER_URL:", url)
+    }
+    return url
   }
 
   // Fallback for production
@@ -63,15 +69,20 @@ export const automationApi = {
       console.log("✅ Automation request completed successfully")
       return response.data
     } catch (error) {
-      console.error("API Error:", error)
+      // Log detailed error for debugging (developers can see this in console)
+      console.error("🔧 Technical Error Details:", {
+        message: axios.isAxiosError(error) ? error.message : String(error),
+        code: axios.isAxiosError(error) ? error.code : "UNKNOWN",
+        status: axios.isAxiosError(error) ? error.response?.status : undefined,
+        url: `${API_BASE_URL}/start-automation`,
+        timestamp: new Date().toISOString(),
+      })
 
       if (axios.isAxiosError(error)) {
-        // Handle specific error types
+        // Handle specific error types with user-friendly messages
         if (error.code === "ERR_NETWORK" || error.code === "NETWORK_ERROR") {
           throw new Error(
-            `❌ Cannot connect to automation server at ${API_BASE_URL}. ` +
-              `Please ensure the backend server is running and accessible. ` +
-              `Error: ${error.message}`
+            `🔌 Unable to connect to the automation service. Please try again in a few moments.`
           )
         }
 
@@ -80,36 +91,31 @@ export const automationApi = {
           error.message.includes("timeout")
         ) {
           throw new Error(
-            `⏱️ Request timeout: The automation server took too long to respond. ` +
-              `This might indicate the server is overloaded or not running.`
+            `⏱️ The automation process is taking longer than expected. Please try again.`
           )
         }
 
         if (error.response?.status === 504) {
           throw new Error(
-            `🔌 Gateway timeout: The automation server is not responding. ` +
-              `Please check if the backend service is running at ${API_BASE_URL}.`
+            `🔌 The automation service is temporarily unavailable. Please try again in a few minutes.`
           )
         }
 
         if (error.response?.status === 403 || error.message.includes("CORS")) {
           throw new Error(
-            `🚫 CORS Error: The automation server is not configured to accept requests from this domain. ` +
-              `Server: ${API_BASE_URL}`
+            `🚫 Access denied. Please refresh the page and try again.`
           )
         }
 
         // Generic error with response
         if (error.response) {
           throw new Error(
-            `❌ Server Error (${error.response.status}): ${
-              error.response.data?.error || error.response.statusText
-            }`
+            `❌ Automation failed. Please try again. (Error ${error.response.status})`
           )
         }
 
         // Generic axios error
-        throw new Error(`❌ Request failed: ${error.message}`)
+        throw new Error(`❌ Something went wrong. Please try again.`)
       }
 
       throw error
@@ -127,32 +133,32 @@ export const automationApi = {
       console.log("✅ Health check successful:", response.data)
       return response.data
     } catch (error) {
-      console.error("❌ Health check failed:", error)
+      // Log detailed error for debugging (developers can see this in console)
+      console.error("🔧 Health Check Technical Details:", {
+        message: axios.isAxiosError(error) ? error.message : String(error),
+        code: axios.isAxiosError(error) ? error.code : "UNKNOWN",
+        status: axios.isAxiosError(error) ? error.response?.status : undefined,
+        url: `${API_BASE_URL}/health`,
+        timestamp: new Date().toISOString(),
+      })
 
       if (axios.isAxiosError(error)) {
         if (error.code === "ERR_NETWORK" || error.code === "NETWORK_ERROR") {
-          throw new Error(
-            `❌ Cannot reach automation server at ${API_BASE_URL}. ` +
-              `The server may be offline or not accessible.`
-          )
+          throw new Error(`🔌 Service unavailable. Please try again later.`)
         }
 
         if (error.response?.status === 504) {
           throw new Error(
-            `🔌 Server timeout: The automation server is not responding at ${API_BASE_URL}.`
+            `⏱️ Service timeout. Please try again in a few minutes.`
           )
         }
 
         if (error.message.includes("CORS")) {
-          throw new Error(
-            `🚫 CORS Error: Server at ${API_BASE_URL} is not configured for this domain.`
-          )
+          throw new Error(`🚫 Access denied. Please refresh the page.`)
         }
       }
 
-      throw new Error(
-        `❌ Unable to connect to automation server at ${API_BASE_URL}`
-      )
+      throw new Error(`❌ Service unavailable. Please try again later.`)
     }
   },
 }
