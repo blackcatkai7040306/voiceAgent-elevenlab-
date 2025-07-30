@@ -9,6 +9,7 @@ import {
   Star,
   Target,
   Activity,
+  MessageCircle,
 } from "lucide-react"
 import { AutomationResult, ExtractedData } from "@/types/automation"
 
@@ -16,6 +17,7 @@ interface ResultsDisplayProps {
   result: AutomationResult | null
   extractedData: ExtractedData
   onRestart?: () => void
+  onContinueVoiceChat?: () => void
   showRestart?: boolean
 }
 
@@ -23,6 +25,7 @@ export const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
   result,
   extractedData,
   onRestart,
+  onContinueVoiceChat,
   showRestart = false,
 }) => {
   // Show results if we have extracted financial data
@@ -155,16 +158,27 @@ export const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
           </div>
         )}
 
-        {/* Restart Button */}
-        {showRestart && onRestart && (
-          <div className="mt-6 text-center">
-            <button
-              onClick={onRestart}
-              className="inline-flex items-center px-6 py-3 bg-gradient-to-r from-green-500 to-blue-500 text-white font-semibold rounded-lg shadow-lg hover:from-green-600 hover:to-blue-600 transition-all duration-200 transform hover:scale-105"
-            >
-              <RefreshCw className="w-5 h-5 mr-2" />
-              Restart Automation
-            </button>
+        {/* Action Buttons */}
+        {showRestart && (
+          <div className="mt-6 flex justify-center space-x-4">
+            {onRestart && (
+              <button
+                onClick={onRestart}
+                className="inline-flex items-center px-6 py-3 bg-gradient-to-r from-green-500 to-blue-500 text-white font-semibold rounded-lg shadow-lg hover:from-green-600 hover:to-blue-600 transition-all duration-200 transform hover:scale-105"
+              >
+                <RefreshCw className="w-5 h-5 mr-2" />
+                Restart Automation
+              </button>
+            )}
+            {onContinueVoiceChat && (
+              <button
+                onClick={onContinueVoiceChat}
+                className="inline-flex items-center px-6 py-3 bg-gradient-to-r from-blue-500 to-indigo-500 text-white font-semibold rounded-lg shadow-lg hover:from-blue-600 hover:to-indigo-600 transition-all duration-200 transform hover:scale-105"
+              >
+                <MessageCircle className="w-5 h-5 mr-2" />
+                Continue Voice Chat
+              </button>
+            )}
           </div>
         )}
       </div>

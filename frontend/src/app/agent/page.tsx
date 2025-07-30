@@ -21,6 +21,33 @@ export default function AgentPage() {
     setIsDataComplete(!!isComplete)
   }
 
+  // Handle automation completion data
+  useEffect(() => {
+    // Check URL parameters for automation completion
+    const params = new URLSearchParams(window.location.search)
+    const automationCompleted = params.get("automationCompleted") === "true"
+    const monthlyIncome = params.get("monthlyIncome")
+    const planValue1 = params.get("planValue1")
+    const planValue2 = params.get("planValue2")
+    const planValue3 = params.get("planValue3")
+
+    if (automationCompleted) {
+      // Add automation results to conversation
+      const automationMessage = [
+        "assistant: Great news! I've completed the automation process and here are your results:",
+        monthlyIncome ? `Your estimated monthly income: $${monthlyIncome}` : "",
+        planValue1 ? `Plan Value 1: $${planValue1}` : "",
+        planValue2 ? `Plan Value 2: $${planValue2}` : "",
+        planValue3 ? `Plan Value 3: $${planValue3}` : "",
+        "Would you like to discuss these results or do you have any questions about your retirement plan?",
+      ]
+        .filter(Boolean)
+        .join("\n")
+
+      setConversation((prev) => [...prev, automationMessage])
+    }
+  }, []) // Run once on mount
+
   const handleSendToAutomation = () => {
     // Navigate to main automation page with extracted data
     const params = new URLSearchParams({

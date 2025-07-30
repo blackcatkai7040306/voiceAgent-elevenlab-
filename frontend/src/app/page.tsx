@@ -155,6 +155,18 @@ export default function HomePage() {
     clearProgress()
   }
 
+  const handleContinueVoiceChat = () => {
+    // Navigate back to agent page with completion status
+    const params = new URLSearchParams({
+      automationCompleted: "true",
+      monthlyIncome: extractedData.monthlyIncomeNet?.toString() || "",
+      planValue1: extractedData.planValues?.value1?.toString() || "",
+      planValue2: extractedData.planValues?.value2?.toString() || "",
+      planValue3: extractedData.planValues?.value3?.toString() || "",
+    })
+    window.location.href = `/agent?${params.toString()}`
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
@@ -224,6 +236,7 @@ export default function HomePage() {
               result={result}
               extractedData={extractedData}
               onRestart={handleRestartAutomation}
+              onContinueVoiceChat={handleContinueVoiceChat}
               showRestart={status === "completed"}
             />
           </div>
