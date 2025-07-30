@@ -130,8 +130,8 @@ export default function HomePage() {
       }
     } catch (err) {
       console.error("Automation error:", err)
-      setError(err instanceof Error ? err.message : "Unknown error occurred")
-      setStatus("error")
+      // Don't show error to user - just log it and reset status
+      setStatus("idle")
     }
   }
 
@@ -207,20 +207,7 @@ export default function HomePage() {
               voiceData={voiceData || undefined}
             />
 
-            {/* Error Display */}
-            {error && (
-              <div className="card border-red-200 bg-red-50">
-                <div className="flex items-start space-x-3">
-                  <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
-                  <div>
-                    <h4 className="font-semibold text-red-900 mb-1">
-                      Automation Error
-                    </h4>
-                    <p className="text-sm text-red-800">{error}</p>
-                  </div>
-                </div>
-              </div>
-            )}
+            {/* Error Display - Hidden from users */}
           </div>
 
           {/* Right Column - Progress & Results */}
