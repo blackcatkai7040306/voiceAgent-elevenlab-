@@ -90,6 +90,14 @@ export const VoiceDataDisplay: React.FC<VoiceDataDisplayProps> = ({
       return parseInt(ageMatch[1])
     }
 
+    // If "in X years", calculate based on current age
+    const inYearsMatch = dateStr.match(/in\s+(\d+)\s+years?/i)
+    if (inYearsMatch) {
+      const yearsFromNow = parseInt(inYearsMatch[1])
+      const currentAge = calculateAge(birthday)
+      return currentAge + yearsFromNow
+    }
+
     // Try to parse as date and calculate age difference
     try {
       let retireDate: Date
@@ -107,18 +115,24 @@ export const VoiceDataDisplay: React.FC<VoiceDataDisplayProps> = ({
       const birthDate = new Date(birthday)
 
       if (!isNaN(retireDate.getTime()) && !isNaN(birthDate.getTime())) {
-        return retireDate.getFullYear() - birthDate.getFullYear()
+        const calculatedAge = retireDate.getFullYear() - birthDate.getFullYear()
+
+        // Ensure the calculated age is reasonable
+        if (calculatedAge >= 50 && calculatedAge <= 100) {
+          return calculatedAge
+        }
       }
     } catch {
       // Continue to fallback
     }
 
-    // If "in X years", calculate based on current age
-    const inYearsMatch = dateStr.match(/in\s+(\d+)\s+years?/i)
-    if (inYearsMatch) {
-      const yearsFromNow = parseInt(inYearsMatch[1])
-      const currentAge = calculateAge(birthday)
-      return currentAge + yearsFromNow
+    // If all else fails, try to extract any number that looks like a retirement age
+    const numberMatch = dateStr.match(/(\d{2,3})/)
+    if (numberMatch) {
+      const possibleAge = parseInt(numberMatch[1])
+      if (possibleAge >= 50 && possibleAge <= 100) {
+        return possibleAge
+      }
     }
 
     return 0
@@ -210,16 +224,69 @@ export const VoiceDataDisplay: React.FC<VoiceDataDisplayProps> = ({
         updates.birthday = voiceData.dateOfBirth
         const age = calculateAge(voiceData.dateOfBirth)
         setCalculatedAge(age)
+      }
 
-        // Calculate retirement age if we have retirement date
-        if (voiceData.retirementDate) {
-          const retirementAge = calculateRetirementAge(
+      // Calculate retirement age - handle different scenarios
+      if (voiceData.retirementDate) {
+        let retirementAge = 0
+
+        console.log("🔢 Calculating retirement age:", {
+          retirementDate: voiceData.retirementDate,
+          dateOfBirth: voiceData.dateOfBirth,
+          calculatedAge,
+        })
+
+        if (voiceData.dateOfBirth) {
+          // We have both birthday and retirement date - calculate precisely
+          retirementAge = calculateRetirementAge(
             voiceData.dateOfBirth,
             voiceData.retirementDate
           )
-          setCalculatedRetirementAge(retirementAge)
-          updates.retirementAge = retirementAge.toString()
+          console.log(
+            "🎯 Calculated retirement age (with birthday):",
+            retirementAge
+          )
+        } else {
+          // We only have retirement date - extract age if possible
+          const dateStr = voiceData.retirementDate.trim()
+
+          // If it's just an age (e.g., "65"), use it directly
+          if (
+            dateStr.match(/^\d{1,2}$/) &&
+            parseInt(dateStr) >= 50 &&
+            parseInt(dateStr) <= 100
+          ) {
+            retirementAge = parseInt(dateStr)
+            console.log("🎯 Extracted retirement age (direct):", retirementAge)
+          }
+          // If it contains "age" keyword, extract the age
+          else {
+            const ageMatch = dateStr.match(/(?:age|at age)\s*(\d{1,2})/i)
+            if (ageMatch) {
+              retirementAge = parseInt(ageMatch[1])
+              console.log(
+                "🎯 Extracted retirement age (from text):",
+                retirementAge
+              )
+            }
+          }
         }
+
+        // Ensure we have a valid retirement age (fallback to 62 if calculation failed)
+        if (retirementAge === 0 || retirementAge < 50 || retirementAge > 100) {
+          console.log(
+            "⚠️ Invalid retirement age, using default 62. Original:",
+            retirementAge
+          )
+          retirementAge = 62 // Default retirement age
+        }
+
+        console.log("✅ Final retirement age to send to server:", retirementAge)
+        setCalculatedRetirementAge(retirementAge)
+        updates.retirementAge = retirementAge.toString()
+
+        // Format and display retirement date
+        setDisplayRetirementDate(formatRetirementDate(voiceData.retirementDate))
       }
 
       // Set investment amount (saved amount)
@@ -229,11 +296,6 @@ export const VoiceDataDisplay: React.FC<VoiceDataDisplayProps> = ({
             ? voiceData.currentRetirementSavings.replace(/[^0-9]/g, "")
             : voiceData.currentRetirementSavings.toString()
         updates.investmentAmount = amount
-      }
-
-      // Format and display retirement date
-      if (voiceData.retirementDate) {
-        setDisplayRetirementDate(formatRetirementDate(voiceData.retirementDate))
       }
 
       // Update form data
@@ -246,6 +308,13 @@ export const VoiceDataDisplay: React.FC<VoiceDataDisplayProps> = ({
     if (status === "running") {
       onStop()
     } else {
+      // Debug: Log the form data being sent to server
+      console.log("🚀 Sending automation data to server:", {
+        formData,
+        calculatedAge,
+        calculatedRetirementAge,
+        voiceData,
+      })
       onStart(formData)
     }
   }
