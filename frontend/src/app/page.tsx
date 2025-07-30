@@ -21,6 +21,7 @@ export default function HomePage() {
     progress,
     currentStep,
     connectionError,
+    usingFallback,
     clearProgress,
     reconnect,
   } = useSocket()

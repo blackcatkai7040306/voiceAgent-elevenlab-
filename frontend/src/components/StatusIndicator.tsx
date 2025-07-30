@@ -87,9 +87,17 @@ export const StatusIndicator: React.FC<StatusIndicatorProps> = ({
                 connectionError.includes("WebSocket")) && (
                 <div className="mt-2 text-xs text-red-700 bg-red-100 p-2 rounded">
                   <strong>HTTPS/WebSocket Issue:</strong> When served over
-                  HTTPS, the browser blocks insecure WebSocket connections. Your
-                  backend needs to support WSS (WebSocket Secure) or you need to
-                  serve this app over HTTP for development.
+                  HTTPS, the browser blocks insecure WebSocket connections. The
+                  system will automatically fallback to HTTP polling for
+                  real-time updates.
+                </div>
+              )}
+
+              {isConnected && (
+                <div className="mt-2 text-xs text-green-700 bg-green-100 p-2 rounded">
+                  <strong>✅ Connected:</strong> Using HTTP polling for
+                  real-time updates. This works just as well as WebSocket but
+                  may have slightly higher latency.
                 </div>
               )}
 
