@@ -72,31 +72,132 @@ export const VoiceDataDisplay: React.FC<VoiceDataDisplayProps> = ({
     retirementDate: string
   ): number => {
     if (!birthday || !retirementDate) return 0
-    const birthDate = new Date(birthday)
-    const retireDate = new Date(retirementDate)
-    return retireDate.getFullYear() - birthDate.getFullYear()
+
+    const dateStr = retirementDate.trim()
+
+    // If it's just an age, return it directly
+    if (
+      dateStr.match(/^\d{1,2}$/) &&
+      parseInt(dateStr) >= 50 &&
+      parseInt(dateStr) <= 100
+    ) {
+      return parseInt(dateStr)
+    }
+
+    // If it contains "age" keyword, extract the age
+    const ageMatch = dateStr.match(/(?:age|at age)\s*(\d{1,2})/i)
+    if (ageMatch) {
+      return parseInt(ageMatch[1])
+    }
+
+    // Try to parse as date and calculate age difference
+    try {
+      let retireDate: Date
+
+      // If it's just a year, assume January 1st
+      if (dateStr.match(/^\d{4}$/)) {
+        retireDate = new Date(`${dateStr}-01-01`)
+      } else if (dateStr.match(/^([A-Za-z]+)\s+(\d{4})$/)) {
+        // Month and year format
+        retireDate = new Date(dateStr + " 1")
+      } else {
+        retireDate = new Date(dateStr)
+      }
+
+      const birthDate = new Date(birthday)
+
+      if (!isNaN(retireDate.getTime()) && !isNaN(birthDate.getTime())) {
+        return retireDate.getFullYear() - birthDate.getFullYear()
+      }
+    } catch {
+      // Continue to fallback
+    }
+
+    // If "in X years", calculate based on current age
+    const inYearsMatch = dateStr.match(/in\s+(\d+)\s+years?/i)
+    if (inYearsMatch) {
+      const yearsFromNow = parseInt(inYearsMatch[1])
+      const currentAge = calculateAge(birthday)
+      return currentAge + yearsFromNow
+    }
+
+    return 0
   }
 
   // Helper function to format retirement date (add January if no month specified)
   const formatRetirementDate = (retirementDate: string): string => {
     if (!retirementDate) return ""
 
+    const dateStr = retirementDate.trim()
+
     // If it's just a year (e.g., "2030"), add January 1st
-    if (retirementDate.match(/^\d{4}$/)) {
-      return `January 1, ${retirementDate}`
+    if (dateStr.match(/^\d{4}$/)) {
+      return `January 1, ${dateStr}`
     }
 
-    // If it's already a full date, format it nicely
-    try {
-      const date = new Date(retirementDate)
-      return date.toLocaleDateString("en-US", {
-        year: "numeric",
-        month: "long",
-        day: "numeric",
-      })
-    } catch {
-      return retirementDate
+    // If it's just an age (e.g., "65"), convert to approximate year
+    if (
+      dateStr.match(/^\d{1,2}$/) &&
+      parseInt(dateStr) >= 50 &&
+      parseInt(dateStr) <= 100
+    ) {
+      const currentYear = new Date().getFullYear()
+      const age = parseInt(dateStr)
+      // Assume current age is around 30-70, calculate retirement year
+      const estimatedCurrentAge = calculatedAge || 50 // fallback to 50 if age not calculated
+      const yearsToRetirement = age - estimatedCurrentAge
+      const retirementYear = currentYear + yearsToRetirement
+      return `January 1, ${retirementYear} (at age ${age})`
     }
+
+    // If it contains "age" keyword (e.g., "age 65", "at age 62")
+    const ageMatch = dateStr.match(/(?:age|at age)\s*(\d{1,2})/i)
+    if (ageMatch) {
+      const age = parseInt(ageMatch[1])
+      const currentYear = new Date().getFullYear()
+      const estimatedCurrentAge = calculatedAge || 50
+      const yearsToRetirement = age - estimatedCurrentAge
+      const retirementYear = currentYear + yearsToRetirement
+      return `January 1, ${retirementYear} (at age ${age})`
+    }
+
+    // If it's a month and year (e.g., "January 2030", "Dec 2025")
+    const monthYearMatch = dateStr.match(/^([A-Za-z]+)\s+(\d{4})$/)
+    if (monthYearMatch) {
+      const [, month, year] = monthYearMatch
+      return `${month} 1, ${year}`
+    }
+
+    // If it contains "in X years" (e.g., "in 5 years", "in 10 years")
+    const inYearsMatch = dateStr.match(/in\s+(\d+)\s+years?/i)
+    if (inYearsMatch) {
+      const yearsFromNow = parseInt(inYearsMatch[1])
+      const currentYear = new Date().getFullYear()
+      const retirementYear = currentYear + yearsFromNow
+      return `January 1, ${retirementYear} (in ${yearsFromNow} years)`
+    }
+
+    // Try to parse as a full date
+    try {
+      const date = new Date(dateStr)
+      // Check if the date is valid
+      if (
+        !isNaN(date.getTime()) &&
+        date.getFullYear() > 1900 &&
+        date.getFullYear() < 2100
+      ) {
+        return date.toLocaleDateString("en-US", {
+          year: "numeric",
+          month: "long",
+          day: "numeric",
+        })
+      }
+    } catch {
+      // Continue to fallback
+    }
+
+    // If nothing else works, return the original string
+    return dateStr
   }
 
   // Update calculations when voice data changes

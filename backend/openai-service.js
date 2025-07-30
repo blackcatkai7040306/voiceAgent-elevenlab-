@@ -55,9 +55,15 @@ Extract and return JSON with these fields (only include fields with actual data)
 {
   "firstName": "user's first name if mentioned",
   "dateOfBirth": "MM/DD/YYYY format or descriptive date",
-  "retirementDate": "MM/DD/YYYY format, retirement age, or descriptive retirement timing",
+  "retirementDate": "retirement age, year, or descriptive timing (e.g., '65', '2030', 'in 5 years', 'age 62')",
   "currentRetirementSavings": "dollar amount saved for retirement"
 }
+
+For retirementDate, prioritize these formats:
+- If user mentions age: use just the number (e.g., "65")
+- If user mentions year: use just the year (e.g., "2030") 
+- If user mentions "in X years": use that format (e.g., "in 5 years")
+- If user mentions specific date: use MM/DD/YYYY format
 
 Only include fields where actual data was provided. Return empty object {} if no data found.
 
