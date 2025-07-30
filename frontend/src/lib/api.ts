@@ -24,7 +24,7 @@ console.log("Environment:", process.env.NODE_ENV) // Debug log
 
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 60000, // Reduced to 1 minute timeout to fail faster
+  timeout: 600000, // 10 minutes timeout for browser automation
   headers: {
     "Content-Type": "application/json",
   },
@@ -35,6 +35,15 @@ const apiClient = axios.create({
   },
 })
 
+// Create a separate client for quick health checks
+const healthClient = axios.create({
+  baseURL: API_BASE_URL,
+  timeout: 10000, // 10 seconds for health checks
+  headers: {
+    "Content-Type": "application/json",
+  },
+})
+
 export const automationApi = {
   async startAutomation(
     formData: AutomationFormData
@@ -42,11 +51,16 @@ export const automationApi = {
     try {
       console.log("🚀 Starting automation request to:", API_BASE_URL)
       console.log("📋 Form data:", formData)
+      console.log(
+        "⏱️ Timeout set to: 10 minutes (browser automation can take time)"
+      )
 
       const response = await apiClient.post<AutomationResponse>(
         "/start-automation",
         formData
       )
+
+      console.log("✅ Automation request completed successfully")
       return response.data
     } catch (error) {
       console.error("API Error:", error)
@@ -109,7 +123,7 @@ export const automationApi = {
   }> {
     try {
       console.log("🏥 Checking health at:", API_BASE_URL)
-      const response = await apiClient.get("/health")
+      const response = await healthClient.get("/health")
       console.log("✅ Health check successful:", response.data)
       return response.data
     } catch (error) {

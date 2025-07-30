@@ -37,7 +37,17 @@ const PORT = 3001;
 // MIDDLEWARE SETUP
 // ============================================
 
-app.use(cors());
+app.use(cors({
+  origin: [
+    'http://localhost:3000',
+    'https://voice-agent-elevenlab.vercel.app',
+    'https://autoincome.theretirementpaycheck.com',
+    'https://theretirementpaycheck.com'
+  ],
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
 app.use(express.json());
 
 // Configure multer for audio file uploads
@@ -335,22 +345,28 @@ app.post('/api/follow-up-questions', async (req, res) => {
   }
 });
 
-app.post('/api/startautomation', async (req, res) => {
+app.post('/start-automation', async (req, res) => {
   try {
-    console.log('Starting automation with data:', req.body);
+    console.log('🚀 Starting automation with data:', req.body);
+    console.log('⏱️ Automation may take 5-10 minutes for browser operations...');
+    
+    // Set a longer timeout for this specific request
+    req.setTimeout(600000); // 10 minutes
+    res.setTimeout(600000); // 10 minutes
     
     const result = await runAutomation(req.body, io);
     
+    console.log('✅ Automation completed successfully');
     res.json({
       success: true,
       message: 'Automation completed successfully',
       result: result
     });
   } catch (error) {
-    console.error('Automation error:', error);
-    res.json({
+    console.error('❌ Automation error:', error);
+    res.status(500).json({
       success: false,
-      error: error.message
+      error: error.message || 'Automation failed'
     });
   }
 });
