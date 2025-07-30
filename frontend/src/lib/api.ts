@@ -1,7 +1,7 @@
 import axios from "axios"
 import { AutomationFormData, AutomationResponse } from "@/types/automation"
 
-const API_BASE_URL = "http://localhost:3001"
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL
 
 console.log("API_BASE_URL:", API_BASE_URL) // Debug log
 
@@ -19,7 +19,7 @@ export const automationApi = {
   ): Promise<AutomationResponse> {
     try {
       const response = await apiClient.post<AutomationResponse>(
-        "/api/start-automation",
+        "/start-automation",
         formData
       )
       return response.data
