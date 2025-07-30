@@ -9,6 +9,15 @@ const getSocketUrl = () => {
 
   // If we have an environment URL, use it
   if (envUrl) {
+    // Auto-fix common protocol mistakes
+    if (envUrl.startsWith("https://")) {
+      console.warn("⚠️ Converting HTTPS to WSS for WebSocket connection")
+      return envUrl.replace("https://", "wss://")
+    }
+    if (envUrl.startsWith("http://")) {
+      console.warn("⚠️ Converting HTTP to WS for WebSocket connection")
+      return envUrl.replace("http://", "ws://")
+    }
     return envUrl
   }
 
