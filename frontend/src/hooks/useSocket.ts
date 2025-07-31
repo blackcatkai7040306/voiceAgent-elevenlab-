@@ -120,8 +120,6 @@ export const useSocket = () => {
     // Progress update handler
     socket.on("automation-progress", (data: ProgressUpdate) => {
       console.log("📊 Progress update:", data)
-
-      // Simple approach: just add all messages, filtering happens at display level
       setProgress((prev) => [...prev, data])
       setCurrentStep(data.step)
     })

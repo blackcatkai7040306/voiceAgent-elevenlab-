@@ -32,7 +32,7 @@ const getStepIcon = (
   isActive: boolean,
   isCompleted: boolean
 ) => {
-  // Prioritize status field completely
+  // Status-based icons take precedence
   if (status === "success" || status === "completed") {
     return <CheckCircle className="w-5 h-5 text-green-500" />
   }
@@ -41,12 +41,7 @@ const getStepIcon = (
     return <XCircle className="w-5 h-5 text-red-500" />
   }
 
-  if (status === "progress") {
-    return <Loader2 className="w-5 h-5 text-blue-500 animate-spin" />
-  }
-
-  // Default pending state for undefined status
-  return <Clock className="w-5 h-5 text-gray-400" />
+  return null
 }
 
 const formatTime = (timestamp: string) => {
@@ -59,6 +54,24 @@ export const ProgressTracker: React.FC<ProgressTrackerProps> = ({
   currentStep,
 }) => {
   if (progress.length === 0) {
+    return null
+  }
+
+  // Filter to only show final states (success/failed) for each step
+  const finalUpdates = progress.reduce((acc, update) => {
+    if (
+      update.status === "success" ||
+      update.status === "completed" ||
+      update.status === "failed"
+    ) {
+      acc[update.step] = update
+    }
+    return acc
+  }, {} as Record<string, ProgressUpdate>)
+
+  const finalUpdatesArray = Object.values(finalUpdates)
+
+  if (finalUpdatesArray.length === 0) {
     return null
   }
 
@@ -91,134 +104,96 @@ export const ProgressTracker: React.FC<ProgressTrackerProps> = ({
       </div>
 
       <div className="space-y-4 max-h-96 overflow-y-auto">
-        {progress
-          .filter((update, index, arr) => {
-            // Debug logging
-            console.log(`Filtering: ${update.step} [${update.status}]`)
+        {finalUpdatesArray.map((update, index) => {
+          const isActive = update.step === currentStep && status === "running"
+          const isCompleted =
+            index < progress.length - 1 || status === "completed"
+          const stepStatus = update.status || "progress"
 
-            // If this is a progress message, check if there's a final status for the same step
-            if (update.status === "progress") {
-              const hasFinalStatus = arr.some(
-                (other) =>
-                  other.step === update.step &&
-                  (other.status === "success" ||
-                    other.status === "failed" ||
-                    other.status === "completed")
-              )
-              console.log(
-                `  Progress message "${
-                  update.step
-                }": hasFinalStatus=${hasFinalStatus}, will ${
-                  hasFinalStatus ? "REMOVE" : "KEEP"
-                }`
-              )
-              // Only show progress if there's no final status
-              return !hasFinalStatus
+          const getBackgroundColor = () => {
+            if (stepStatus === "success" || stepStatus === "completed") {
+              return "bg-green-50 border border-green-200"
             }
-            // Always show non-progress messages
-            console.log(`  Non-progress message "${update.step}": KEEP`)
-            return true
-          })
-          .map((update, index) => {
-            const stepStatus = update.status || "progress"
-
-            // Simplified logic - status field is the source of truth
-            const isActive = stepStatus === "progress"
-            const isCompleted =
-              stepStatus === "success" ||
-              stepStatus === "completed" ||
-              stepStatus === "failed"
-
-            const getBackgroundColor = () => {
-              if (stepStatus === "success" || stepStatus === "completed") {
-                return "bg-green-50 border border-green-200"
-              }
-              if (stepStatus === "failed") {
-                return "bg-red-50 border border-red-200"
-              }
-              if (stepStatus === "progress" || isActive) {
-                return "bg-blue-50 border border-blue-200"
-              }
-              return "bg-gray-50"
+            if (stepStatus === "failed") {
+              return "bg-red-50 border border-red-200"
             }
+            return "bg-gray-50 border border-gray-200"
+          }
 
-            return (
-              <div
-                key={`${update.step}-${index}`}
-                className={`flex items-start space-x-3 p-3 rounded-lg transition-all duration-200 ${getBackgroundColor()}`}
-              >
-                <div className="flex-shrink-0 mt-0.5">
-                  {getStepIcon(update.step, stepStatus, isActive, isCompleted)}
-                </div>
-
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between">
-                    <p
-                      className={`text-sm font-medium ${
-                        stepStatus === "success" || stepStatus === "completed"
-                          ? "text-green-900"
-                          : stepStatus === "failed"
-                          ? "text-red-900"
-                          : stepStatus === "progress" || isActive
-                          ? "text-blue-900"
-                          : "text-gray-900"
-                      }`}
-                    >
-                      {update.message}
-                    </p>
-                    <span className="text-xs text-gray-500">
-                      {formatTime(update.timestamp)}
-                    </span>
-                  </div>
-
-                  {update.details && Object.keys(update.details).length > 0 && (
-                    <div className="mt-2 text-xs text-gray-600">
-                      {update.details.monthlyIncomeNet && (
-                        <div className="font-medium text-success-700">
-                          💰 Monthly Income (Net):{" "}
-                          {update.details.monthlyIncomeNet}
-                        </div>
-                      )}
-                      {update.details.targetValue1 &&
-                        update.details.targetValue2 && (
-                          <div className="font-medium text-primary-700">
-                            📊 Start of Plan Values:{" "}
-                            {update.details.targetValue1} |{" "}
-                            {update.details.targetValue2}
-                            {update.details.referenceValue3 &&
-                              ` | ${update.details.referenceValue3}`}
-                          </div>
-                        )}
-                      {update.details.startOfPlanValues &&
-                        typeof update.details.startOfPlanValues === "object" &&
-                        !Array.isArray(update.details.startOfPlanValues) && (
-                          <div className="font-medium text-primary-700">
-                            📊 Start of Plan Values:{" "}
-                            {update.details.startOfPlanValues.value1} |{" "}
-                            {update.details.startOfPlanValues.value2} |{" "}
-                            {update.details.startOfPlanValues.value3}
-                          </div>
-                        )}
-                      {/* Backward compatibility for old format */}
-                      {update.details.value1 &&
-                        update.details.value2 &&
-                        update.details.value3 && (
-                          <div className="font-medium text-primary-700">
-                            📊 Plan Values: {update.details.value1} |{" "}
-                            {update.details.value2} | {update.details.value3}
-                          </div>
-                        )}
-                      {update.details.pageTitle && (
-                        <div className="truncate">
-                          📄 Page: {update.details.pageTitle}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
+          return (
+            <div
+              key={`${update.step}-${index}`}
+              className={`flex items-start space-x-3 p-3 rounded-lg transition-all duration-200 ${getBackgroundColor()}`}
+            >
+              <div className="flex-shrink-0 mt-0.5">
+                {getStepIcon(update.step, stepStatus, isActive, isCompleted)}
               </div>
-            )
-          })}
+
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between">
+                  <p
+                    className={`text-sm font-medium ${
+                      stepStatus === "success" || stepStatus === "completed"
+                        ? "text-green-900"
+                        : stepStatus === "failed"
+                        ? "text-red-900"
+                        : "text-gray-900"
+                    }`}
+                  >
+                    {update.message}
+                  </p>
+                  <span className="text-xs text-gray-500">
+                    {formatTime(update.timestamp)}
+                  </span>
+                </div>
+
+                {update.details && Object.keys(update.details).length > 0 && (
+                  <div className="mt-2 text-xs text-gray-600">
+                    {update.details.monthlyIncomeNet && (
+                      <div className="font-medium text-success-700">
+                        💰 Monthly Income (Net):{" "}
+                        {update.details.monthlyIncomeNet}
+                      </div>
+                    )}
+                    {update.details.targetValue1 &&
+                      update.details.targetValue2 && (
+                        <div className="font-medium text-primary-700">
+                          📊 Start of Plan Values: {update.details.targetValue1}{" "}
+                          | {update.details.targetValue2}
+                          {update.details.referenceValue3 &&
+                            ` | ${update.details.referenceValue3}`}
+                        </div>
+                      )}
+                    {update.details.startOfPlanValues &&
+                      typeof update.details.startOfPlanValues === "object" &&
+                      !Array.isArray(update.details.startOfPlanValues) && (
+                        <div className="font-medium text-primary-700">
+                          📊 Start of Plan Values:{" "}
+                          {update.details.startOfPlanValues.value1} |{" "}
+                          {update.details.startOfPlanValues.value2} |{" "}
+                          {update.details.startOfPlanValues.value3}
+                        </div>
+                      )}
+                    {/* Backward compatibility for old format */}
+                    {update.details.value1 &&
+                      update.details.value2 &&
+                      update.details.value3 && (
+                        <div className="font-medium text-primary-700">
+                          📊 Plan Values: {update.details.value1} |{" "}
+                          {update.details.value2} | {update.details.value3}
+                        </div>
+                      )}
+                    {update.details.pageTitle && (
+                      <div className="truncate">
+                        📄 Page: {update.details.pageTitle}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          )
+        })}
       </div>
     </div>
   )
