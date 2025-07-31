@@ -109,7 +109,10 @@ export default function HomePage() {
 
     // Only update if we have meaningful data
     if (accumulatedData.monthlyIncomeNet || accumulatedData.planValues) {
+      console.log("💰 Extracted data updated:", accumulatedData)
       setExtractedData(accumulatedData)
+    } else {
+      console.log("📊 No meaningful data extracted yet:", accumulatedData)
     }
   }, [progress])
 
@@ -118,16 +121,28 @@ export default function HomePage() {
     const lastUpdate = progress[progress.length - 1]
     if (!lastUpdate) return
 
+    console.log("🔍 Checking last update:", lastUpdate.step, lastUpdate.status)
+
     if (lastUpdate.status === "completed" && lastUpdate.step === "completed") {
       console.log("🎉 Automation completed successfully via socket!")
       setStatus("completed")
 
-      // Auto-navigate to voice chat if we have extracted data
-      if (extractedData.monthlyIncomeNet || extractedData.planValues) {
+      // Check for extracted data in the completion update itself or accumulated data
+      const hasExtractedData =
+        lastUpdate.details?.monthlyIncomeNet ||
+        lastUpdate.details?.planValues ||
+        extractedData.monthlyIncomeNet ||
+        extractedData.planValues
+
+      if (hasExtractedData) {
         console.log("🚀 Auto-navigating to voice chat with results...")
         setTimeout(() => {
           handleContinueVoiceChat()
         }, 2000) // Wait 2 seconds to show results first
+      } else {
+        console.log("⏳ No extracted data found, manual navigation required")
+        console.log("Completion details:", lastUpdate.details)
+        console.log("Current extracted data:", extractedData)
       }
     } else if (
       lastUpdate.status === "failed" &&
@@ -135,8 +150,14 @@ export default function HomePage() {
     ) {
       console.log("❌ Automation failed via socket")
       setStatus("error")
+    } else {
+      console.log(
+        "📊 Progress update - not completion:",
+        lastUpdate.step,
+        lastUpdate.status
+      )
     }
-  }, [progress, extractedData])
+  }, [progress])
 
   const handleStartAutomation = async (formData: AutomationFormData) => {
     // Start automation - status will be updated via socket
