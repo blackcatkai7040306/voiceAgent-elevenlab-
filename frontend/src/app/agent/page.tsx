@@ -21,64 +21,29 @@ export default function AgentPage() {
     setIsDataComplete(!!isComplete)
   }
 
-  // Handle automation data
+  // Handle automation completion data
   useEffect(() => {
-    // Check URL parameters
+    // Check URL parameters for automation completion
     const params = new URLSearchParams(window.location.search)
     const automationCompleted = params.get("automationCompleted") === "true"
-    const hadError = params.get("hadError") === "true"
     const monthlyIncome = params.get("monthlyIncome")
     const planValue1 = params.get("planValue1")
     const planValue2 = params.get("planValue2")
     const planValue3 = params.get("planValue3")
-    const currentStep = params.get("currentStep")
-    const lastProgressMessage = params.get("lastProgressMessage")
 
-    // Determine if we have any meaningful data
-    const hasData = monthlyIncome || planValue1 || planValue2 || planValue3
+    if (automationCompleted) {
+      // Add automation results to conversation
+      const automationMessage = [
+        "assistant: Great news! I've completed the automation process and here are your results:",
+        monthlyIncome ? `Your estimated monthly income: $${monthlyIncome}` : "",
+        planValue1 ? `Plan Value 1: $${planValue1}` : "",
+        planValue2 ? `Plan Value 2: $${planValue2}` : "",
+        planValue3 ? `Plan Value 3: $${planValue3}` : "",
+        "Would you like to discuss these results or do you have any questions about your retirement plan?",
+      ]
+        .filter(Boolean)
+        .join("\n")
 
-    if (hasData) {
-      let messageLines = []
-
-      if (automationCompleted) {
-        // Successful completion message
-        messageLines = [
-          "assistant: Great news! I've completed the automation process and here are your results:",
-          monthlyIncome
-            ? `Your estimated monthly income: $${monthlyIncome}`
-            : "",
-          planValue1 ? `Plan Value 1: $${planValue1}` : "",
-          planValue2 ? `Plan Value 2: $${planValue2}` : "",
-          planValue3 ? `Plan Value 3: $${planValue3}` : "",
-          "Would you like to discuss these results or do you have any questions about your retirement plan?",
-        ]
-      } else if (hadError) {
-        // Error but with partial data
-        messageLines = [
-          "assistant: I encountered some issues during the automation, but I did manage to extract some information:",
-          monthlyIncome ? `Estimated monthly income: $${monthlyIncome}` : "",
-          planValue1 ? `Plan Value 1: $${planValue1}` : "",
-          planValue2 ? `Plan Value 2: $${planValue2}` : "",
-          planValue3 ? `Plan Value 3: $${planValue3}` : "",
-          `The process stopped at step: ${currentStep || "unknown"}`,
-          lastProgressMessage ? `Last status: ${lastProgressMessage}` : "",
-          "Would you like to discuss what we found so far, or would you prefer to try the automation again?",
-        ]
-      } else {
-        // In-progress with partial data
-        messageLines = [
-          "assistant: I've gathered some information from the automation process:",
-          monthlyIncome
-            ? `Current estimate of monthly income: $${monthlyIncome}`
-            : "",
-          planValue1 ? `Plan Value 1: $${planValue1}` : "",
-          planValue2 ? `Plan Value 2: $${planValue2}` : "",
-          planValue3 ? `Plan Value 3: $${planValue3}` : "",
-          "Would you like to discuss these preliminary results, or would you like to know more about what these numbers mean?",
-        ]
-      }
-
-      const automationMessage = messageLines.filter(Boolean).join("\n")
       setConversation((prev) => [...prev, automationMessage])
     }
   }, []) // Run once on mount

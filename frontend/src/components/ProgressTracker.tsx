@@ -1,7 +1,7 @@
 "use client"
 
 import React from "react"
-import { CheckCircle, Clock, AlertCircle, Loader2 } from "lucide-react"
+import { CheckCircle, Clock, AlertCircle, Loader2, XCircle } from "lucide-react"
 import { ProgressUpdate, AutomationStatus } from "@/types/automation"
 
 interface ProgressTrackerProps {
@@ -26,15 +26,27 @@ const stepIcons: Record<string, React.ComponentType<any>> = {
   completed: CheckCircle,
 }
 
-const getStepIcon = (step: string, isActive: boolean, isCompleted: boolean) => {
-  const IconComponent = stepIcons[step] || Clock
-
-  if (isCompleted) {
-    return <CheckCircle className="w-5 h-5 text-success-500" />
+const getStepIcon = (
+  step: string,
+  status: string | undefined,
+  isActive: boolean,
+  isCompleted: boolean
+) => {
+  // Status-based icons take precedence
+  if (status === "success" || status === "completed") {
+    return <CheckCircle className="w-5 h-5 text-green-500" />
   }
 
-  if (isActive) {
-    return <Loader2 className="w-5 h-5 text-primary-500 animate-spin" />
+  if (status === "failed") {
+    return <XCircle className="w-5 h-5 text-red-500" />
+  }
+
+  if (status === "progress" || isActive) {
+    return <Loader2 className="w-5 h-5 text-blue-500 animate-spin" />
+  }
+
+  if (isCompleted) {
+    return <CheckCircle className="w-5 h-5 text-green-500" />
   }
 
   return <Clock className="w-5 h-5 text-gray-400" />
@@ -86,30 +98,40 @@ export const ProgressTracker: React.FC<ProgressTrackerProps> = ({
           const isActive = update.step === currentStep && status === "running"
           const isCompleted =
             index < progress.length - 1 || status === "completed"
+          const stepStatus = update.status || "progress"
+
+          const getBackgroundColor = () => {
+            if (stepStatus === "success" || stepStatus === "completed") {
+              return "bg-green-50 border border-green-200"
+            }
+            if (stepStatus === "failed") {
+              return "bg-red-50 border border-red-200"
+            }
+            if (stepStatus === "progress" || isActive) {
+              return "bg-blue-50 border border-blue-200"
+            }
+            return "bg-gray-50"
+          }
 
           return (
             <div
               key={`${update.step}-${index}`}
-              className={`flex items-start space-x-3 p-3 rounded-lg transition-all duration-200 ${
-                isActive
-                  ? "bg-primary-50 border border-primary-200"
-                  : isCompleted
-                  ? "bg-success-50 border border-success-200"
-                  : "bg-gray-50"
-              }`}
+              className={`flex items-start space-x-3 p-3 rounded-lg transition-all duration-200 ${getBackgroundColor()}`}
             >
               <div className="flex-shrink-0 mt-0.5">
-                {getStepIcon(update.step, isActive, isCompleted)}
+                {getStepIcon(update.step, stepStatus, isActive, isCompleted)}
               </div>
 
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between">
                   <p
                     className={`text-sm font-medium ${
-                      isActive
-                        ? "text-primary-900"
-                        : isCompleted
-                        ? "text-success-900"
+                      stepStatus === "success" || stepStatus === "completed"
+                        ? "text-green-900"
+                        : stepStatus === "failed"
+                        ? "text-red-900"
+                        : stepStatus === "progress" || isActive
+                        ? "text-blue-900"
                         : "text-gray-900"
                     }`}
                   >

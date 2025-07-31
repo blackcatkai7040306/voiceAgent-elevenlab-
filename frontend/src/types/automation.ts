@@ -15,6 +15,7 @@ export interface AutomationFormData {
 export interface ProgressUpdate {
   step: string
   message: string
+  status?: "progress" | "success" | "failed" | "completed"
   timestamp: string
   details?: {
     [key: string]: any

@@ -47,7 +47,6 @@ export const automationApi = {
       )
 
       console.log("✅ Automation request completed successfully")
-      console.log("--------Here is automation response data--------")
       return response.data
     } catch (error) {
       // Log detailed error for debugging (developers can see this in console)

@@ -33,17 +33,19 @@ const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
  * @param {Object} io - Socket.IO instance
  * @param {string} step - Current step identifier
  * @param {string} message - Progress message
+ * @param {string} status - Step status: 'progress', 'success', 'failed', 'completed'
  * @param {Object} details - Additional data to include
  */
-function emitProgress(io, step, message, details = {}) {
+function emitProgress(io, step, message, status = 'progress', details = {}) {
   const progressData = {
     step,
     message,
+    status,
     timestamp: new Date().toISOString(),
     ...details
   };
   
-  console.log(`Progress: ${step} - ${message}`);
+  console.log(`Progress [${status.toUpperCase()}]: ${step} - ${message}`);
   
   if (io) {
     io.emit('automation-progress', progressData);
@@ -100,7 +102,7 @@ async function runAutomation(formData, io = null) {
     });
     
     // Navigate to the Income Conductor app
-    emitProgress(io, 'navigation', 'Navigating to Income Conductor website...');
+    emitProgress(io, 'navigation', 'Navigating to Income Conductor website...', 'progress');
     console.log('Navigating to Income Conductor...');
     await page.goto(SITE_URL, { 
       waitUntil: 'networkidle2',
@@ -108,6 +110,7 @@ async function runAutomation(formData, io = null) {
     });
     
     console.log('Page loaded successfully!');
+    emitProgress(io, 'navigation', 'Successfully loaded Income Conductor website', 'success');
     
     // Wait for page to fully load
     await wait(2000);
@@ -143,7 +146,7 @@ async function runAutomation(formData, io = null) {
       }
       
       if (emailInput) {
-        emitProgress(io, 'login', 'Login form detected, entering credentials...');
+        emitProgress(io, 'login', 'Login form detected, entering credentials...', 'progress');
         console.log('Login form detected, proceeding with login...');
         
         // Clear and type email
@@ -797,9 +800,10 @@ async function runAutomation(formData, io = null) {
         console.log('=== 💰 MONTHLY INCOME (NET) EXTRACTED ===');
         console.log(`💰 Income /mo (Net): ${monthlyIncomeNet}`);
         console.log('========================================');
-        emitProgress(io, 'data-extracted', `Monthly Income (Net) extracted: ${monthlyIncomeNet}`, { monthlyIncomeNet });
+        emitProgress(io, 'data-extracted', `Monthly Income (Net) extracted: ${monthlyIncomeNet}`, 'success', { monthlyIncomeNet });
       } else {
         console.log('Income /mo (Net) value not found in plan summary');
+        emitProgress(io, 'data-extracted', 'Monthly Income (Net) not found', 'failed');
       }
       
     } catch (error) {
@@ -837,7 +841,7 @@ async function runAutomation(formData, io = null) {
         console.log(`📊 Reference Value 3: ${startOfPlanValues.value3}`);
         console.log(`📋 Key Values: ${startOfPlanValues.value1} | ${startOfPlanValues.value2}`);
         console.log('=======================================');
-        emitProgress(io, 'plan-data-extracted', `Start of Plan values extracted: ${startOfPlanValues.value1}, ${startOfPlanValues.value2}`, { 
+        emitProgress(io, 'plan-data-extracted', `Start of Plan values extracted: ${startOfPlanValues.value1}, ${startOfPlanValues.value2}`, 'success', { 
           startOfPlanValues,
           targetValue1: startOfPlanValues.value1,  // $40,567
           targetValue2: startOfPlanValues.value2,  // $109,433
@@ -845,6 +849,7 @@ async function runAutomation(formData, io = null) {
         });
       } else {
         console.log('Start of Plan values not found');
+        emitProgress(io, 'plan-data-extracted', 'Start of Plan values not found', 'failed');
       }
       
     } catch (error) {
@@ -878,7 +883,7 @@ async function runAutomation(formData, io = null) {
     // Final wait before completion
     await wait(3000);
     
-    emitProgress(io, 'completed', 'Automation completed successfully!', {
+    emitProgress(io, 'completed', 'Automation completed successfully!', 'completed', {
       pageTitle,
       currentUrl,
       timestamp: new Date().toISOString()
@@ -902,6 +907,7 @@ async function runAutomation(formData, io = null) {
     
   } catch (error) {
     console.error('Automation failed:', error);
+    emitProgress(io, 'automation', `Automation failed: ${error.message}`, 'failed');
     throw new Error(`Automation failed: ${error.message}`);
   } finally {
     if (browser) {

@@ -113,25 +113,48 @@ export default function HomePage() {
     }
   }, [progress])
 
-  const handleStartAutomation = async (formData: AutomationFormData) => {
-    try {
-      setStatus("running")
-      setError(null)
-      setResult(null)
-      clearProgress()
+  // Handle automation completion/failure via socket
+  useEffect(() => {
+    const lastUpdate = progress[progress.length - 1]
+    if (!lastUpdate) return
 
-      const response = await automationApi.startAutomation(formData)
+    if (lastUpdate.status === "completed" && lastUpdate.step === "completed") {
+      console.log("🎉 Automation completed successfully via socket!")
+      setStatus("completed")
 
-      if (response.success && response.result) {
-        setResult(response.result)
-        setStatus("completed")
-      } else {
-        throw new Error(response.error || "Automation failed")
+      // Auto-navigate to voice chat if we have extracted data
+      if (extractedData.monthlyIncomeNet || extractedData.planValues) {
+        console.log("🚀 Auto-navigating to voice chat with results...")
+        setTimeout(() => {
+          handleContinueVoiceChat()
+        }, 2000) // Wait 2 seconds to show results first
       }
+    } else if (
+      lastUpdate.status === "failed" &&
+      lastUpdate.step === "automation"
+    ) {
+      console.log("❌ Automation failed via socket")
+      setStatus("error")
+    }
+  }, [progress, extractedData])
+
+  const handleStartAutomation = async (formData: AutomationFormData) => {
+    // Start automation - status will be updated via socket
+    setStatus("running")
+    setError(null)
+    setResult(null)
+    clearProgress()
+
+    // Trigger automation via API but ignore the response
+    // All progress and completion will be handled via socket
+    try {
+      console.log("🚀 Starting automation (socket-only mode)...")
+      await automationApi.startAutomation(formData)
     } catch (err) {
-      console.error("Automation error:", err)
-      // Don't show error to user - just log it and reset status
-      setStatus("idle")
+      console.log(
+        "📡 API call completed/failed - continuing with socket monitoring"
+      )
+      // Ignore API errors - socket will handle the real status
     }
   }
 
@@ -156,20 +179,13 @@ export default function HomePage() {
   }
 
   const handleContinueVoiceChat = () => {
-    // Navigate back to agent page with any extracted data
+    // Navigate back to agent page with completion status
     const params = new URLSearchParams({
-      // Include automation status
-      automationCompleted: (status === "completed").toString(),
-      // Include any extracted data we have
+      automationCompleted: "true",
       monthlyIncome: extractedData.monthlyIncomeNet?.toString() || "",
       planValue1: extractedData.planValues?.value1?.toString() || "",
       planValue2: extractedData.planValues?.value2?.toString() || "",
       planValue3: extractedData.planValues?.value3?.toString() || "",
-      // Include progress data
-      currentStep: currentStep || "",
-      lastProgressMessage: progress[progress.length - 1]?.message || "",
-      // Include any errors that occurred
-      hadError: (status === "error").toString(),
     })
     window.location.href = `/agent?${params.toString()}`
   }
