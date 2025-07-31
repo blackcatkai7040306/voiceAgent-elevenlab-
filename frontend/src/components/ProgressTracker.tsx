@@ -59,19 +59,8 @@ export const ProgressTracker: React.FC<ProgressTrackerProps> = ({
     return null
   }
 
-  // Always show only final states (success/failed) for each step
-  const finalUpdates = progress.reduce((acc, update) => {
-    if (
-      update.status === "success" ||
-      update.status === "completed" ||
-      update.status === "failed"
-    ) {
-      acc[update.step] = update
-    }
-    return acc
-  }, {} as Record<string, ProgressUpdate>)
-
-  const displayUpdates = Object.values(finalUpdates)
+  // Show all progress updates, but icons only appear for final states
+  const displayUpdates = progress
 
   if (displayUpdates.length === 0) {
     return null
@@ -119,7 +108,9 @@ export const ProgressTracker: React.FC<ProgressTrackerProps> = ({
             if (stepStatus === "failed") {
               return "bg-red-50 border border-red-200"
             }
-
+            if (stepStatus === "progress") {
+              return "bg-gray-50 border border-gray-200"
+            }
             return "bg-gray-50 border border-gray-200"
           }
 
@@ -146,6 +137,8 @@ export const ProgressTracker: React.FC<ProgressTrackerProps> = ({
                         ? "text-green-900"
                         : stepStatus === "failed"
                         ? "text-red-900"
+                        : stepStatus === "progress"
+                        ? "text-gray-700"
                         : "text-gray-900"
                     }`}
                   >
