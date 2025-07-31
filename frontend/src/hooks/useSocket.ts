@@ -120,7 +120,34 @@ export const useSocket = () => {
     // Progress update handler
     socket.on("automation-progress", (data: ProgressUpdate) => {
       console.log("📊 Progress update:", data)
-      setProgress((prev) => [...prev, data])
+
+      setProgress((prev) => {
+        // Find all messages for this step
+        const stepMessages = prev.filter((p) => p.step === data.step)
+        const hasProgressMessage = stepMessages.some(
+          (s) => s.status === "progress"
+        )
+        const isFinalStatus =
+          data.status === "success" ||
+          data.status === "failed" ||
+          data.status === "completed"
+
+        console.log(
+          `Step ${data.step}: hasProgress=${hasProgressMessage}, isFinal=${isFinalStatus}, newStatus=${data.status}`
+        )
+
+        if (hasProgressMessage && isFinalStatus) {
+          // Replace all progress messages for this step with the final status
+          const newProgress = prev.filter(
+            (p) => !(p.step === data.step && p.status === "progress")
+          )
+          return [...newProgress, data]
+        } else {
+          // Add as new message
+          return [...prev, data]
+        }
+      })
+
       setCurrentStep(data.step)
     })
 

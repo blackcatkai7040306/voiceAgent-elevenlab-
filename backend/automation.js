@@ -44,9 +44,9 @@ function emitProgress(io, step, message, status = 'progress', details = {}) {
     timestamp: new Date().toISOString(),
     ...details
   };
-  
+
   console.log(`Progress [${status.toUpperCase()}]: ${step} - ${message}`);
-  
+
   if (io) {
     io.emit('automation-progress', progressData);
   }
@@ -64,13 +64,13 @@ function emitProgress(io, step, message, status = 'progress', details = {}) {
  */
 async function runAutomation(formData, io = null) {
   let browser;
-  
+
   try {
     // ========================================
     // BROWSER INITIALIZATION
     // ========================================
     console.log('Launching browser...');
-    
+
     // Launch browser with visible window and proxy
     browser = await puppeteer.launch({
       executablePath: 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe', // Use system Chrome
@@ -90,48 +90,48 @@ async function runAutomation(formData, io = null) {
 
     console.log('Opening new page...');
     const page = await browser.newPage();
-    
+
     // Set viewport
     await page.setViewport({ width: 1366, height: 768 });
-    
+
     // Authenticate proxy
     console.log('Authenticating proxy...');
     await page.authenticate({
       username: PROXY_CONFIG.username,
       password: PROXY_CONFIG.password
     });
-    
+
     // Navigate to the Income Conductor app
     emitProgress(io, 'navigation', 'Navigating to Income Conductor website...', 'progress');
     console.log('Navigating to Income Conductor...');
-    await page.goto(SITE_URL, { 
+    await page.goto(SITE_URL, {
       waitUntil: 'networkidle2',
-      timeout: 30000 
+      timeout: 30000
     });
-    
+
     console.log('Page loaded successfully!');
     emitProgress(io, 'navigation', 'Successfully loaded Income Conductor website', 'success');
-    
+
     // Wait for page to fully load
     await wait(2000);
-    
+
     // ========================================
     // AUTHENTICATION PROCESS
     // ========================================
     await wait(1000);
-    
+
     try {
       // Look for common login field selectors
       const loginSelectors = [
         'input[type="email"]',
-        'input[name="email"]', 
+        'input[name="email"]',
         'input[name="username"]',
         'input[placeholder*="email" i]',
         'input[placeholder*="username" i]',
         '#email',
         '#username'
       ];
-      
+
       let emailInput = null;
       for (const selector of loginSelectors) {
         try {
@@ -144,23 +144,23 @@ async function runAutomation(formData, io = null) {
           // Continue to next selector
         }
       }
-      
+
       if (emailInput) {
         emitProgress(io, 'login', 'Login form detected, entering credentials...', 'progress');
         console.log('Login form detected, proceeding with login...');
-        
+
         // Clear and type email
         await emailInput.click({ clickCount: 3 });
         await emailInput.type(CREDENTIALS.username);
         console.log('Email entered');
-        
+
         // Find password field
         const passwordSelectors = [
           'input[type="password"]',
           'input[name="password"]',
           '#password'
         ];
-        
+
         let passwordInput = null;
         for (const selector of passwordSelectors) {
           try {
@@ -173,12 +173,12 @@ async function runAutomation(formData, io = null) {
             // Continue to next selector
           }
         }
-        
+
         if (passwordInput) {
           await passwordInput.click({ clickCount: 3 });
           await passwordInput.type(CREDENTIALS.password);
           console.log('Password entered');
-          
+
           // Find and click login button
           const loginButtonSelectors = [
             'button[type="submit"]',
@@ -188,7 +188,7 @@ async function runAutomation(formData, io = null) {
             '.login-button',
             '#login-button'
           ];
-          
+
           let loginButton = null;
           for (const selector of loginButtonSelectors) {
             try {
@@ -201,20 +201,22 @@ async function runAutomation(formData, io = null) {
               // Continue to next selector
             }
           }
-          
+
           if (loginButton) {
             console.log('Clicking login button...');
             await loginButton.click();
-            
+
             // Wait for navigation after login
             await wait(1000);
             console.log('Login submitted, waiting for page to load...');
-            
+
             // Wait for potential redirect or loading
             try {
               await page.waitForNavigation({ timeout: 5000, waitUntil: 'networkidle2' });
+              emitProgress(io, 'login', 'Login successful', 'success');
             } catch (e) {
               console.log('No navigation detected, continuing...');
+              emitProgress(io, 'login', 'Login completed (no redirect detected)', 'success');
             }
           } else {
             console.log('Login button not found, trying to submit form');
@@ -229,21 +231,22 @@ async function runAutomation(formData, io = null) {
       }
     } catch (loginError) {
       console.log('Login attempt completed with some issues:', loginError.message);
+      emitProgress(io, 'login', 'Login failed or skipped', 'failed');
     }
-    
+
     // ========================================
     // NAVIGATION & PLAN SELECTION
     // ========================================
     await wait(1000);
-    
+
     try {
-      emitProgress(io, 'plan-selection', 'Looking for Plan card...');
+      emitProgress(io, 'plan-selection', 'Looking for Plan card...', 'progress');
       console.log('Looking for Plan card...');
-      
+
       // Simple selector for the Plan card title
       const planCardSelector = 'h5.card-title';
       await page.waitForSelector(planCardSelector, { timeout: 1000 });
-      
+
       // Click on the Plan card by finding the h5 with "Plan" text
       await page.evaluate(() => {
         const planTitles = document.querySelectorAll('h5.card-title');
@@ -254,23 +257,25 @@ async function runAutomation(formData, io = null) {
           }
         }
       });
-      
+
       await wait(2000);
       console.log('Plan card clicked successfully');
-      
+      emitProgress(io, 'plan-selection', 'Plan card selected successfully', 'success');
+
     } catch (error) {
       console.log('Could not click Plan card:', error.message);
+      emitProgress(io, 'plan-selection', 'Failed to select Plan card', 'failed');
     }
-    
+
     // ========================================
     // CLIENT SELECTION & INTERACTION
     // ========================================
     await wait(1000);
-    
+
     try {
-      emitProgress(io, 'client-selection', 'Selecting Average, Joe client...');
+      emitProgress(io, 'client-selection', 'Selecting Average, Joe client...', 'progress');
       console.log('Looking for Average, Joe client link...');
-      
+
       // Click on the client link containing "Average, Joe"
       await page.evaluate(() => {
         const links = document.querySelectorAll('a[href*="/clients/view/"]');
@@ -281,20 +286,22 @@ async function runAutomation(formData, io = null) {
           }
         }
       });
-      
+
       await wait(2000);
       console.log('Average, Joe client link clicked successfully');
-      
+      emitProgress(io, 'client-selection', 'Average, Joe client selected successfully', 'success');
+
     } catch (error) {
       console.log('Could not click Average, Joe client link:', error.message);
+      emitProgress(io, 'client-selection', 'Failed to select Average, Joe client', 'failed');
     }
-    
+
     // Wait and click on Profile link
     await wait(3000);
-    
+
     try {
       console.log('Looking for Profile link...');
-      
+
       // Click on the Profile nav link
       await page.evaluate(() => {
         const links = document.querySelectorAll('a.nav-link');
@@ -305,24 +312,24 @@ async function runAutomation(formData, io = null) {
           }
         }
       });
-      
+
       await wait(2000);
       console.log('Profile link clicked successfully');
-      
+
     } catch (error) {
       console.log('Could not click Profile link:', error.message);
     }
-    
+
     // ========================================
     // PROFILE UPDATES
     // ========================================
     await wait(1000);
-    
+
     try {
       const birthday = formData.birthday || '07/01/1967';
-      emitProgress(io, 'profile-update', `Updating client profile with date of birth: ${birthday}...`);
+      emitProgress(io, 'profile-update', `Updating client profile with date of birth: ${birthday}...`, 'progress');
       console.log('Looking for date of birth field...');
-      
+
       // Find and fill the DOB input field
       const dobInput = await page.$('#data\\.dob');
       if (dobInput) {
@@ -333,19 +340,20 @@ async function runAutomation(formData, io = null) {
       } else {
         console.log('Date of birth field not found');
       }
-      
+
       await wait(1000);
-      
+
     } catch (error) {
       console.log('Could not fill date of birth field:', error.message);
+      emitProgress(io, 'profile-update', 'Failed to update client profile', 'failed');
     }
-    
+
     // Wait and click Save changes button
     await wait(1000);
-    
+
     try {
       console.log('Looking for Save changes button...');
-      
+
       // Click on the Save changes button
       await page.evaluate(() => {
         const spans = document.querySelectorAll('span');
@@ -358,20 +366,21 @@ async function runAutomation(formData, io = null) {
           }
         }
       });
-      
+
       await wait(1000);
       console.log('Save changes button clicked successfully');
-      
+      emitProgress(io, 'profile-update', 'Client profile updated successfully', 'success');
+
     } catch (error) {
       console.log('Could not click Save changes button:', error.message);
     }
-    
+
     // Wait and click on Plans link
     await wait(1000);
-    
+
     try {
       console.log('Looking for Plans link...');
-      
+
       // Click on the Plans nav link
       await page.evaluate(() => {
         const links = document.querySelectorAll('a.nav-link');
@@ -382,20 +391,20 @@ async function runAutomation(formData, io = null) {
           }
         }
       });
-      
+
       await wait(1000);
       console.log('Plans link clicked successfully');
-      
+
     } catch (error) {
       console.log('Could not click Plans link:', error.message);
     }
-    
+
     // Wait and click on chevron-down icon
     await wait(1000);
-    
+
     try {
       console.log('Looking for chevron-down icon...');
-      
+
       // Click on the chevron-down icon
       await page.evaluate(() => {
         const chevronIcons = document.querySelectorAll('i.fa-chevron-down');
@@ -404,20 +413,20 @@ async function runAutomation(formData, io = null) {
           return;
         }
       });
-      
+
       await wait(1000);
       console.log('Chevron-down icon clicked successfully');
-      
+
     } catch (error) {
       console.log('Could not click chevron-down icon:', error.message);
     }
-    
+
     // Wait and click on Edit dropdown item
     await wait(1000);
-    
+
     try {
       console.log('Looking for Edit dropdown item...');
-      
+
       // Click on the Edit dropdown item
       await page.evaluate(() => {
         const dropdownItems = document.querySelectorAll('a.dropdown-item');
@@ -428,20 +437,20 @@ async function runAutomation(formData, io = null) {
           }
         }
       });
-      
-            await wait(1000);
+
+      await wait(1000);
       console.log('Edit dropdown item clicked successfully');
-        
+
     } catch (error) {
       console.log('Could not click Edit dropdown item:', error.message);
     }
-    
+
     // Wait and handle SweetAlert2 OK button with multiple strategies
     await wait(2000);
-    
+
     try {
       console.log('Looking for SweetAlert2 OK button...');
-      
+
       // Multiple selectors to try for SweetAlert2 OK button
       const okButtonSelectors = [
         'button.swal2-confirm.btn.btn-info',
@@ -453,10 +462,10 @@ async function runAutomation(formData, io = null) {
         '.swal2-actions button',
         'button.btn.btn-info'
       ];
-      
+
       let okButton = null;
       let foundSelector = null;
-      
+
       // Try each selector with a wait
       for (const selector of okButtonSelectors) {
         try {
@@ -472,7 +481,7 @@ async function runAutomation(formData, io = null) {
           console.log(`Selector ${selector} not found, trying next...`);
         }
       }
-      
+
       // If no specific selector worked, try a more general approach
       if (!okButton) {
         console.log('Trying general approach to find OK button...');
@@ -484,7 +493,7 @@ async function runAutomation(formData, io = null) {
               return button;
             }
           }
-          
+
           // Look for SweetAlert2 confirm buttons
           const swalButtons = document.querySelectorAll('[class*="swal2"], [class*="confirm"]');
           for (let button of swalButtons) {
@@ -492,35 +501,35 @@ async function runAutomation(formData, io = null) {
               return button;
             }
           }
-          
+
           return null;
         });
-        
+
         if (okButton) {
           foundSelector = 'general text/class search';
         }
       }
-      
+
       if (okButton) {
         await okButton.click();
         console.log(`SweetAlert2 OK button clicked successfully using: ${foundSelector}`);
       } else {
         console.log('SweetAlert2 OK button not found with any method - continuing without clicking');
       }
-      
+
       await wait(1000);
-      
+
     } catch (error) {
       console.log('Could not click SweetAlert2 OK button:', error.message);
       console.log('Continuing automation without OK button click...');
     }
-    
+
     // Wait and click Done button with multiple strategies
     await wait(1000);
-    
+
     try {
       console.log('Looking for Done button...');
-      
+
       // Multiple selectors to try for Done button
       const doneButtonSelectors = [
         'button.wt-btn-next',
@@ -530,10 +539,10 @@ async function runAutomation(formData, io = null) {
         '.wt-btn-next',
         'button.btn-next'
       ];
-      
+
       let doneButton = null;
       let foundSelector = null;
-      
+
       // Try each selector
       for (const selector of doneButtonSelectors) {
         try {
@@ -547,7 +556,7 @@ async function runAutomation(formData, io = null) {
           // Continue to next selector
         }
       }
-      
+
       // If no specific selector worked, try a general approach
       if (!doneButton) {
         doneButton = await page.evaluate(() => {
@@ -563,31 +572,31 @@ async function runAutomation(formData, io = null) {
           foundSelector = 'text search for "done"';
         }
       }
-      
+
       if (doneButton) {
         await doneButton.click();
         console.log(`Done button clicked successfully using: ${foundSelector}`);
       } else {
         console.log('Done button not found with any method - continuing without clicking');
       }
-      
+
       await wait(1000);
-      
+
     } catch (error) {
       console.log('Could not click Done button:', error.message);
       console.log('Continuing automation without Done button click...');
     }
-    
+
     // ========================================
     // INVESTMENT CONFIGURATION
     // ========================================
     await wait(1000);
-    
+
     try {
       const investmentAmount = formData.investmentAmount || '130000';
-      emitProgress(io, 'investment-input', `Entering investment amount: $${investmentAmount}...`);
+      emitProgress(io, 'investment-input', `Entering investment amount: $${investmentAmount}...`, 'progress');
       console.log('Looking for investment amount field...');
-      
+
       // Find and fill the investment amount input field
       const investmentInput = await page.$('input[name="investmentamount"]');
       if (investmentInput) {
@@ -596,22 +605,24 @@ async function runAutomation(formData, io = null) {
         await investmentInput.type(investmentAmount);
         await page.keyboard.press('Enter');
         console.log(`Investment amount field filled successfully with ${investmentAmount} and Enter pressed`);
+        emitProgress(io, 'investment-input', `Investment amount $${investmentAmount} entered successfully`, 'success');
       } else {
         console.log('Investment amount field not found');
       }
-      
+
       await wait(1000);
-      
+
     } catch (error) {
       console.log('Could not fill investment amount field:', error.message);
+      emitProgress(io, 'investment-input', 'Failed to enter investment amount', 'failed');
     }
-    
+
     // Wait and click Clients tab
     await wait(1000);
-    
+
     try {
       console.log('Looking for Clients tab...');
-      
+
       // Click on the Clients tab
       const clientsTab = await page.$('a.nav-link[data-tabid="8"]');
       if (clientsTab) {
@@ -620,34 +631,35 @@ async function runAutomation(formData, io = null) {
       } else {
         console.log('Clients tab not found');
       }
-      
+
       await wait(1000);
-      
+
     } catch (error) {
       console.log('Could not click Clients tab:', error.message);
     }
-    
+
     // Wait and fill client fields
     await wait(1000);
-    
+
     try {
       const retirementAge = formData.retirementAge || '62';
       const longevityEstimate = formData.longevityEstimate || '100';
-      emitProgress(io, 'client-data', `Updating client retirement age: ${retirementAge} and longevity: ${longevityEstimate}...`);
+      emitProgress(io, 'client-data', `Updating client retirement age: ${retirementAge} and longevity: ${longevityEstimate}...`, 'progress');
       console.log('Looking for client retirement age field...');
-      
+
       // Fill retirement age field
       const retirementAgeInput = await page.$('input[name="client_retirement_age"]');
       if (retirementAgeInput) {
         await retirementAgeInput.click({ clickCount: 3 });
         await retirementAgeInput.type(retirementAge);
         console.log(`Retirement age field filled successfully with ${retirementAge}`);
+        emitProgress(io, 'client-data', `Client retirement data updated successfully`, 'success');
       } else {
         console.log('Retirement age field not found');
       }
-      
+
       await wait(500);
-      
+
       // Fill longevity field
       const longevityInput = await page.$('input[name="client_longevity"]');
       if (longevityInput) {
@@ -657,9 +669,9 @@ async function runAutomation(formData, io = null) {
       } else {
         console.log('Longevity field not found');
       }
-      
+
       await wait(500);
-      
+
       // Select retirement month
       const retirementMonth = formData.retirementMonth || '1';
       console.log(`🗓️ Retirement Month/Year data received:`, {
@@ -668,7 +680,7 @@ async function runAutomation(formData, io = null) {
         allFormData: formData
       });
       console.log(`Selecting retirement month: ${retirementMonth}`);
-      
+
       try {
         const monthSelect = await page.$('select[name="client_retirement_month"]');
         if (monthSelect) {
@@ -680,13 +692,13 @@ async function runAutomation(formData, io = null) {
       } catch (error) {
         console.log('Could not select retirement month:', error.message);
       }
-      
+
       await wait(500);
-      
+
       // Select retirement year
       const retirementYear = formData.retirementYear || '2030';
       console.log(`Selecting retirement year: ${retirementYear}`);
-      
+
       try {
         const yearSelect = await page.$('select[name="client_retirement_year"]');
         if (yearSelect) {
@@ -698,19 +710,19 @@ async function runAutomation(formData, io = null) {
       } catch (error) {
         console.log('Could not select retirement year:', error.message);
       }
-      
+
       await wait(1000);
-      
+
     } catch (error) {
       console.log('Could not fill client fields:', error.message);
     }
-    
+
     // Wait and click Update button with multiple strategies
     await wait(1000);
-    
+
     try {
       console.log('Looking for Update button...');
-      
+
       // Multiple selectors to try for Update button
       const updateButtonSelectors = [
         'button.btn.btn-primary',
@@ -721,10 +733,10 @@ async function runAutomation(formData, io = null) {
         'input[type="submit"]',
         '.btn-primary'
       ];
-      
+
       let updateButton = null;
       let foundSelector = null;
-      
+
       // Try each selector
       for (const selector of updateButtonSelectors) {
         try {
@@ -738,7 +750,7 @@ async function runAutomation(formData, io = null) {
           // Continue to next selector
         }
       }
-      
+
       // If no specific selector worked, try a general approach
       if (!updateButton) {
         updateButton = await page.evaluate(() => {
@@ -757,30 +769,30 @@ async function runAutomation(formData, io = null) {
           foundSelector = 'text search for "update"';
         }
       }
-      
+
       if (updateButton) {
         await updateButton.click();
         console.log(`Update button clicked successfully using: ${foundSelector}`);
       } else {
         console.log('Update button not found with any method - continuing without clicking');
       }
-      
+
       await wait(1000);
-      
+
     } catch (error) {
       console.log('Could not click Update button:', error.message);
       console.log('Continuing automation without Update button click...');
     }
-    
+
     // ========================================
     // DATA EXTRACTION & RESULTS
     // ========================================
     await wait(2000);
-    
+
     try {
-      emitProgress(io, 'data-extraction', 'Extracting Income /mo (Net) from plan summary...');
+      emitProgress(io, 'data-extraction', 'Extracting Income /mo (Net) from plan summary...', 'progress');
       console.log('Extracting Income /mo (Net) value...');
-      
+
       // Extract Income /mo (Net) value from plan summary
       const monthlyIncomeNet = await page.evaluate(() => {
         const listItems = document.querySelectorAll('.list-plan-summary .list-group-item');
@@ -795,7 +807,7 @@ async function runAutomation(formData, io = null) {
         }
         return null;
       });
-      
+
       if (monthlyIncomeNet) {
         console.log('=== 💰 MONTHLY INCOME (NET) EXTRACTED ===');
         console.log(`💰 Income /mo (Net): ${monthlyIncomeNet}`);
@@ -805,15 +817,16 @@ async function runAutomation(formData, io = null) {
         console.log('Income /mo (Net) value not found in plan summary');
         emitProgress(io, 'data-extracted', 'Monthly Income (Net) not found', 'failed');
       }
-      
+
     } catch (error) {
       console.log('Could not extract Income /mo (Net) value:', error.message);
+      emitProgress(io, 'data-extraction', 'Failed to extract Income /mo (Net)', 'failed');
     }
-    
+
     // Extract Start of Plan values - specifically $40,567 and $109,433
     try {
       console.log('Extracting Start of Plan values ($40,567 and $109,433)...');
-      
+
       const startOfPlanValues = await page.evaluate(() => {
         const rows = document.querySelectorAll('tr');
         for (let row of rows) {
@@ -833,7 +846,7 @@ async function runAutomation(formData, io = null) {
         }
         return null;
       });
-      
+
       if (startOfPlanValues) {
         console.log('=== 🎯 START OF PLAN VALUES EXTRACTED ===');
         console.log(`📊 Target Value 1: ${startOfPlanValues.value1}`);
@@ -841,7 +854,7 @@ async function runAutomation(formData, io = null) {
         console.log(`📊 Reference Value 3: ${startOfPlanValues.value3}`);
         console.log(`📋 Key Values: ${startOfPlanValues.value1} | ${startOfPlanValues.value2}`);
         console.log('=======================================');
-        emitProgress(io, 'plan-data-extracted', `Start of Plan values extracted: ${startOfPlanValues.value1}, ${startOfPlanValues.value2}`, 'success', { 
+        emitProgress(io, 'plan-data-extracted', `Start of Plan values extracted: ${startOfPlanValues.value1}, ${startOfPlanValues.value2}`, 'success', {
           startOfPlanValues,
           targetValue1: startOfPlanValues.value1,  // $40,567
           targetValue2: startOfPlanValues.value2,  // $109,433
@@ -851,45 +864,45 @@ async function runAutomation(formData, io = null) {
         console.log('Start of Plan values not found');
         emitProgress(io, 'plan-data-extracted', 'Start of Plan values not found', 'failed');
       }
-      
+
     } catch (error) {
       console.log('Could not extract Start of Plan values:', error.message);
     }
-    
+
     // ========================================
     // COMPLETION & CLEANUP
     // ========================================
-    
+
     // Take screenshot for verification
     console.log('Taking screenshot...');
-    await page.screenshot({ 
+    await page.screenshot({
       path: 'automation-screenshot.png',
-      fullPage: true 
+      fullPage: true
     });
-    
+
     // Demonstrate automation success with page interaction
     console.log('Demonstrating browser automation is working...');
     await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight / 2));
     await wait(1000);
     await page.evaluate(() => window.scrollTo(0, 0));
     await wait(1000);
-    
+
     // Get page metadata for verification
     const pageTitle = await page.title();
     const currentUrl = await page.url();
     console.log(`Page Title: ${pageTitle}`);
     console.log(`Current URL: ${currentUrl}`);
-    
+
     // Final wait before completion
     await wait(3000);
-    
+
     emitProgress(io, 'completed', 'Automation completed successfully!', 'completed', {
       pageTitle,
       currentUrl,
       timestamp: new Date().toISOString()
     });
     console.log('Automation completed successfully!');
-    
+
     return {
       success: true,
       pageTitle: pageTitle,
@@ -904,7 +917,7 @@ async function runAutomation(formData, io = null) {
       },
       message: 'Browser automation completed successfully with user-provided values. Check automation-screenshot.png for proof.'
     };
-    
+
   } catch (error) {
     console.error('Automation failed:', error);
     emitProgress(io, 'automation', `Automation failed: ${error.message}`, 'failed');

@@ -32,7 +32,7 @@ const getStepIcon = (
   isActive: boolean,
   isCompleted: boolean
 ) => {
-  // Status-based icons take precedence
+  // Prioritize status field completely
   if (status === "success" || status === "completed") {
     return <CheckCircle className="w-5 h-5 text-green-500" />
   }
@@ -41,14 +41,11 @@ const getStepIcon = (
     return <XCircle className="w-5 h-5 text-red-500" />
   }
 
-  if (status === "progress" || isActive) {
+  if (status === "progress") {
     return <Loader2 className="w-5 h-5 text-blue-500 animate-spin" />
   }
 
-  if (isCompleted) {
-    return <CheckCircle className="w-5 h-5 text-green-500" />
-  }
-
+  // Default pending state for undefined status
   return <Clock className="w-5 h-5 text-gray-400" />
 }
 
@@ -95,10 +92,14 @@ export const ProgressTracker: React.FC<ProgressTrackerProps> = ({
 
       <div className="space-y-4 max-h-96 overflow-y-auto">
         {progress.map((update, index) => {
-          const isActive = update.step === currentStep && status === "running"
-          const isCompleted =
-            index < progress.length - 1 || status === "completed"
           const stepStatus = update.status || "progress"
+
+          // Simplified logic - status field is the source of truth
+          const isActive = stepStatus === "progress"
+          const isCompleted =
+            stepStatus === "success" ||
+            stepStatus === "completed" ||
+            stepStatus === "failed"
 
           const getBackgroundColor = () => {
             if (stepStatus === "success" || stepStatus === "completed") {
