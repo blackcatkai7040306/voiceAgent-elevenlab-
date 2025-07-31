@@ -42,13 +42,7 @@ const getStepIcon = (
     return <XCircle className="w-5 h-5 text-red-500" />
   }
 
-  // During automation, show progress icons
-  if (automationStatus === "running") {
-    if (status === "progress" || isActive) {
-      return <Loader2 className="w-5 h-5 text-blue-500 animate-spin" />
-    }
-  }
-
+  // Don't show any icons for progress states
   return null
 }
 
@@ -65,23 +59,19 @@ export const ProgressTracker: React.FC<ProgressTrackerProps> = ({
     return null
   }
 
-  // Show different content based on status
-  let displayUpdates = progress
+  // Always show only final states (success/failed) for each step
+  const finalUpdates = progress.reduce((acc, update) => {
+    if (
+      update.status === "success" ||
+      update.status === "completed" ||
+      update.status === "failed"
+    ) {
+      acc[update.step] = update
+    }
+    return acc
+  }, {} as Record<string, ProgressUpdate>)
 
-  if (status === "completed" || status === "error") {
-    // After completion: only show final states (success/failed) for each step
-    const finalUpdates = progress.reduce((acc, update) => {
-      if (
-        update.status === "success" ||
-        update.status === "completed" ||
-        update.status === "failed"
-      ) {
-        acc[update.step] = update
-      }
-      return acc
-    }, {} as Record<string, ProgressUpdate>)
-    displayUpdates = Object.values(finalUpdates)
-  }
+  const displayUpdates = Object.values(finalUpdates)
 
   if (displayUpdates.length === 0) {
     return null
@@ -129,12 +119,7 @@ export const ProgressTracker: React.FC<ProgressTrackerProps> = ({
             if (stepStatus === "failed") {
               return "bg-red-50 border border-red-200"
             }
-            if (
-              status === "running" &&
-              (stepStatus === "progress" || isActive)
-            ) {
-              return "bg-blue-50 border border-blue-200"
-            }
+
             return "bg-gray-50 border border-gray-200"
           }
 
@@ -161,9 +146,6 @@ export const ProgressTracker: React.FC<ProgressTrackerProps> = ({
                         ? "text-green-900"
                         : stepStatus === "failed"
                         ? "text-red-900"
-                        : status === "running" &&
-                          (stepStatus === "progress" || isActive)
-                        ? "text-blue-900"
                         : "text-gray-900"
                     }`}
                   >
