@@ -30,15 +30,23 @@ const getStepIcon = (
   step: string,
   status: string | undefined,
   isActive: boolean,
-  isCompleted: boolean
+  isCompleted: boolean,
+  automationStatus: AutomationStatus
 ) => {
-  // Status-based icons take precedence
+  // Final states always show icons
   if (status === "success" || status === "completed") {
     return <CheckCircle className="w-5 h-5 text-green-500" />
   }
 
   if (status === "failed") {
     return <XCircle className="w-5 h-5 text-red-500" />
+  }
+
+  // During automation, show progress icons
+  if (automationStatus === "running") {
+    if (status === "progress" || isActive) {
+      return <Loader2 className="w-5 h-5 text-blue-500 animate-spin" />
+    }
   }
 
   return null
@@ -57,21 +65,25 @@ export const ProgressTracker: React.FC<ProgressTrackerProps> = ({
     return null
   }
 
-  // Filter to only show final states (success/failed) for each step
-  const finalUpdates = progress.reduce((acc, update) => {
-    if (
-      update.status === "success" ||
-      update.status === "completed" ||
-      update.status === "failed"
-    ) {
-      acc[update.step] = update
-    }
-    return acc
-  }, {} as Record<string, ProgressUpdate>)
+  // Show different content based on status
+  let displayUpdates = progress
 
-  const finalUpdatesArray = Object.values(finalUpdates)
+  if (status === "completed" || status === "error") {
+    // After completion: only show final states (success/failed) for each step
+    const finalUpdates = progress.reduce((acc, update) => {
+      if (
+        update.status === "success" ||
+        update.status === "completed" ||
+        update.status === "failed"
+      ) {
+        acc[update.step] = update
+      }
+      return acc
+    }, {} as Record<string, ProgressUpdate>)
+    displayUpdates = Object.values(finalUpdates)
+  }
 
-  if (finalUpdatesArray.length === 0) {
+  if (displayUpdates.length === 0) {
     return null
   }
 
@@ -104,7 +116,7 @@ export const ProgressTracker: React.FC<ProgressTrackerProps> = ({
       </div>
 
       <div className="space-y-4 max-h-96 overflow-y-auto">
-        {finalUpdatesArray.map((update, index) => {
+        {displayUpdates.map((update, index) => {
           const isActive = update.step === currentStep && status === "running"
           const isCompleted =
             index < progress.length - 1 || status === "completed"
@@ -117,6 +129,12 @@ export const ProgressTracker: React.FC<ProgressTrackerProps> = ({
             if (stepStatus === "failed") {
               return "bg-red-50 border border-red-200"
             }
+            if (
+              status === "running" &&
+              (stepStatus === "progress" || isActive)
+            ) {
+              return "bg-blue-50 border border-blue-200"
+            }
             return "bg-gray-50 border border-gray-200"
           }
 
@@ -126,7 +144,13 @@ export const ProgressTracker: React.FC<ProgressTrackerProps> = ({
               className={`flex items-start space-x-3 p-3 rounded-lg transition-all duration-200 ${getBackgroundColor()}`}
             >
               <div className="flex-shrink-0 mt-0.5">
-                {getStepIcon(update.step, stepStatus, isActive, isCompleted)}
+                {getStepIcon(
+                  update.step,
+                  stepStatus,
+                  isActive,
+                  isCompleted,
+                  status
+                )}
               </div>
 
               <div className="flex-1 min-w-0">
@@ -137,6 +161,9 @@ export const ProgressTracker: React.FC<ProgressTrackerProps> = ({
                         ? "text-green-900"
                         : stepStatus === "failed"
                         ? "text-red-900"
+                        : status === "running" &&
+                          (stepStatus === "progress" || isActive)
+                        ? "text-blue-900"
                         : "text-gray-900"
                     }`}
                   >
