@@ -25,7 +25,7 @@ export async function processVoiceInput(
     formData.append("conversationHistory", JSON.stringify(conversationHistory))
     formData.append("extractedData", JSON.stringify(extractedData))
 
-    const response = await fetch(`${API_BASE_URL}/api/voice/process`, {
+    const response = await fetch(`${API_BASE_URL}/voice/process`, {
       method: "POST",
       body: formData,
     })
@@ -85,7 +85,7 @@ export async function convertTextToSpeech(text: string): Promise<boolean> {
   try {
     console.log("🔊 Converting text to speech via backend...")
 
-    const response = await fetch(`${API_BASE_URL}/api/voice/text-to-speech`, {
+    const response = await fetch(`${API_BASE_URL}/voice/text-to-speech`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
