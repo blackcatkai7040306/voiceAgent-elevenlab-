@@ -84,7 +84,10 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
 
   // On connect, play greeting, then start listening
   useEffect(() => {
-    if (isConnected && conversation.length === 0) {
+    if (!isConnected) return;
+
+    // If conversation is empty, start with greeting
+    if (conversation.length === 0) {
       const initialGreeting = "Hi there this is Mark, who am I speaking with?"
       const greetingMessage: ConversationMessage = {
         type: "assistant",
@@ -104,6 +107,11 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
           }, 500)
         }
       })
+    } else if (!isAllDataCollected(extractedData)) {
+      // If conversation exists and data is not complete, resume listening
+      setTimeout(() => {
+        startListening()
+      }, 500)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isConnected])
