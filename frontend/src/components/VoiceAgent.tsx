@@ -163,7 +163,7 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
     }
   };
 
-  // Start listening (recording)
+  // Start listening (recording) ///
   const startListening = async () => {
     if (!hasStarted || stopListeningRef.current || isAllDataCollected(extractedData)) {
       return;
