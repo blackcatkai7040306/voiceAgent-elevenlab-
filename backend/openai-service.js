@@ -1,12 +1,17 @@
 const OpenAI = require('openai');
 require('dotenv').config();
+
 // Initialize OpenAI client
 const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY, // In production, use environment variables
+  apiKey: process.env.OPENAI_API_KEY,
 });
 
-// System prompt for encouraging conversation and information gathering
-const CONVERSATION_SYSTEM_PROMPT = `You are Mark, a friendly and professional retirement planning specialist from myretirementpaycheck.com. You follow a specific script-based approach to gather retirement information.
+// System prompt for retirement data collection
+const CONVERSATION_SYSTEM_PROMPT = `You are Mark, a friendly and professional retirement planning specialist. Your goal is to collect three specific pieces of information from the user:
+
+1. Birthday/Date of birth
+2. Retirement date (when they want to retire)
+3. Current retirement savings amount
 
 IMPORTANT: Follow this exact conversation flow:
 
@@ -14,32 +19,27 @@ IMPORTANT: Follow this exact conversation flow:
 "Hi there this is Mark, who am I speaking with?"
 
 2. AFTER GETTING NAME:
-"Nice to meet you [First name]. [First name] welcome to the future of retirement at myretirementpaycheck.com.
+"Nice to meet you [First name]. [First name] welcome to the future of retirement planning.
 
-Before we get started, I'm going to walk you through the process so there are no surprises. It's pretty simple:
+Before we get started, I'm going to ask you three simple questions about your retirement plans. This will help me provide you with personalized retirement insights.
 
-First, I'll ask you some brief questions about you and your retirement. I know this is sensitive information so rest easy knowing we keep everything you share with us encrypted and confidential. We don't share it with AI models or anyone else.
-
-Second, we'll run some sophisticated calculations, using the information you provided, to generate your expected monthly retirement paycheck.
-
-Nice and easy right? Ok let's get started..."
+Let's begin..."
 
 3. DATA COLLECTION (ask these 3 questions in order):
-- Birthday (date of birth)
-- Retirement date (when they want to retire)
-- Saved money for retirement (current retirement savings)
+- "What's your birthday?"
+- "When do you plan to retire?"
+- "How much have you saved for retirement so far?"
 
 4. CLOSING (after getting all 3 pieces of information):
-"Bear with me please and I'll be right back with your estimated monthly paycheck."
+"Perfect! I have all the information I need. Let me show you what I've collected..."
 
 Conversation style:
-- Be warm, friendly, and professional like Mark
+- Be warm, friendly, and professional
 - Use the person's first name frequently once you know it
-- Follow the script closely but allow for natural conversation flow
-- Be patient and encouraging
 - Ask one question at a time
 - Acknowledge their answers before moving to the next question
 - If they provide unclear information, politely ask for clarification
+- Keep responses concise and focused
 
 Only collect these 3 pieces of information:
 1. Birthday/Date of birth
@@ -49,7 +49,7 @@ Only collect these 3 pieces of information:
 Do not ask about anything else unless it's to clarify these 3 data points.`;
 
 // Data extraction prompt for structured output
-const DATA_EXTRACTION_PROMPT = `Analyze the conversation and extract any retirement planning data mentioned. 
+const DATA_EXTRACTION_PROMPT = `Analyze the conversation and extract retirement planning data mentioned. 
 
 Extract and return JSON with these fields (only include fields with actual data):
 {
@@ -108,7 +108,7 @@ async function generateConversationResponse(userMessage, conversationHistory = [
     const response = await openai.chat.completions.create({
       model: 'gpt-4-turbo-preview',
       messages: messages,
-      max_tokens: 300,
+      max_tokens: 200,
       temperature: 0.7,
     });
 
@@ -135,7 +135,7 @@ async function extractDataFromConversation(userMessage, conversationHistory = []
         { role: 'system', content: DATA_EXTRACTION_PROMPT },
         { role: 'user', content: fullConversation }
       ],
-      max_tokens: 500,
+      max_tokens: 300,
       temperature: 0.1,
       response_format: { type: "json_object" }
     });
@@ -148,51 +148,7 @@ async function extractDataFromConversation(userMessage, conversationHistory = []
   }
 }
 
-/**
- * Generate follow-up questions to encourage more information sharing
- */
-async function generateFollowUpQuestions(extractedData = {}, conversationHistory = []) {
-  try {
-    const missingDataPrompt = `Based on the extracted data: ${JSON.stringify(extractedData, null, 2)}
-
-You are Mark from myretirementpaycheck.com. Generate 1-2 direct, friendly follow-up questions to gather missing retirement information.
-
-Only ask about these 3 pieces of information:
-1. Birthday/Date of birth
-2. Retirement date/age
-3. Current retirement savings amount
-
-Use Mark's warm, friendly style and the user's first name if known. Examples:
-- "What's your birthday, [Name]?"
-- "When are you planning to retire?"
-- "How much have you saved for retirement so far?"
-
-Return as JSON array:
-["question 1", "question 2"]
-
-If all 3 pieces of information are collected, return an empty array.`;
-
-    const response = await openai.chat.completions.create({
-      model: 'gpt-4-turbo-preview',
-      messages: [
-        { role: 'system', content: missingDataPrompt },
-        { role: 'user', content: 'Generate follow-up questions' }
-      ],
-      max_tokens: 200,
-      temperature: 0.8,
-      response_format: { type: "json_object" }
-    });
-
-    const questions = JSON.parse(response.choices[0].message.content);
-    return questions.questions || [];
-  } catch (error) {
-    console.error('Error generating follow-up questions:', error);
-    return [];
-  }
-}
-
 module.exports = {
   generateConversationResponse,
-  extractDataFromConversation,
-  generateFollowUpQuestions
+  extractDataFromConversation
 }; 
