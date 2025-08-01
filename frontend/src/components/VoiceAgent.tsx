@@ -116,6 +116,7 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
   // Start the conversation
   const startConversation = async () => {
     setHasStarted(true)
+    stopListeningRef.current = false // Reset stop flag
     if (conversation.length === 0) {
       const initialGreeting = "Hi there this is Mark, who am I speaking with?"
       const greetingMessage: ConversationMessage = {
@@ -126,15 +127,16 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
       setConversation([greetingMessage])
       onConversationUpdate([`assistant: ${initialGreeting}`])
       setStatus("speaking")
+      setIsPlaying(true)
       await convertTextToSpeech(initialGreeting)
       setIsPlaying(false)
-      if (!isAllDataCollected(extractedData)) {
-        setTimeout(() => startListening(), 500)
-      }
+      // Start listening after greeting
+      await new Promise(resolve => setTimeout(resolve, 500)) // Small delay
+      await startListening()
     } else {
       // Resume from existing conversation
       if (!isAllDataCollected(extractedData)) {
-        startListening()
+        await startListening()
       }
     }
   }
@@ -144,11 +146,18 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
     if (!hasStarted || stopListeningRef.current || isAllDataCollected(extractedData)) {
       return
     }
+
+    // Ensure we're not already recording
+    if (audioRecorderRef.current?.isRecording()) {
+      return
+    }
+
     setStatus("listening")
     setCurrentTranscript("Listening...")
     try {
       audioRecorderRef.current = await recordAudio()
       audioRecorderRef.current.start()
+      
       // Automatically stop after 6 seconds
       setTimeout(async () => {
         if (audioRecorderRef.current?.isRecording()) {
@@ -159,23 +168,34 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
       console.error("❌ Error starting recording:", error)
       setStatus("waiting")
       setCurrentTranscript("")
+      // Try to restart listening after error
+      setTimeout(async () => {
+        if (!stopListeningRef.current && !isAllDataCollected(extractedData)) {
+          await startListening()
+        }
+      }, 1000)
     }
   }
 
   // Stop listening and process audio
   const stopListening = async () => {
     if (!audioRecorderRef.current) return
-    setStatus("processing")
-    setCurrentTranscript("Processing...")
-    setIsProcessing(true)
+    
     try {
+      setStatus("processing")
+      setCurrentTranscript("Processing...")
+      setIsProcessing(true)
+
       const audioBlob = await audioRecorderRef.current.stop()
+      audioRecorderRef.current = null // Clear recorder immediately
+
       const result = await processVoiceInput(
         audioBlob,
         conversation,
         extractedData,
         sessionId.current
       )
+
       if (result.success && result.transcription.trim()) {
         setCurrentTranscript("")
         const userMessage: ConversationMessage = {
@@ -188,6 +208,7 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
           content: result.aiResponse,
           timestamp: new Date(),
         }
+
         const updatedConversation = [...conversation, userMessage, aiMessage]
         setConversation(updatedConversation)
         const mergedData = { ...extractedData, ...result.extractedData }
@@ -196,12 +217,17 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
         onConversationUpdate(
           updatedConversation.map((msg) => `${msg.type}: ${msg.content}`)
         )
+
+        // Play AI response
         setStatus("speaking")
         setIsPlaying(true)
         await convertTextToSpeech(result.aiResponse)
         setIsPlaying(false)
+
+        // Continue listening if not complete
         if (!isAllDataCollected(mergedData)) {
-          setTimeout(() => startListening(), 500)
+          await new Promise(resolve => setTimeout(resolve, 500)) // Small delay
+          await startListening()
         } else {
           setStatus("complete")
         }
@@ -212,11 +238,17 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
       console.error("❌ Error processing voice input:", error)
       setCurrentTranscript("")
       setStatus("waiting")
+      
       if (!isPlaying) {
+        setIsPlaying(true)
         await convertTextToSpeech("I'm sorry, I had trouble processing that. Could you please try again?")
+        setIsPlaying(false)
       }
+
+      // Try to restart listening after error
       if (!isAllDataCollected(extractedData)) {
-        setTimeout(() => startListening(), 1000)
+        await new Promise(resolve => setTimeout(resolve, 1000))
+        await startListening()
       }
     } finally {
       setIsProcessing(false)
