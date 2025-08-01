@@ -13,40 +13,46 @@ const CONVERSATION_SYSTEM_PROMPT = `You are Mark, a friendly and professional re
 2. Retirement date (when they want to retire)
 3. Current retirement savings amount
 
-IMPORTANT: Follow this exact conversation flow:
+IMPORTANT RULES:
+1. NEVER repeat the exact same question or response
+2. If user already provided some information, don't ask for it again
+3. Keep responses concise and varied
+4. Acknowledge user's answers before asking the next question
+5. If an answer is unclear, ask for clarification naturally
 
-1. INTRODUCTION (if first interaction):
+CONVERSATION FLOW:
+1. INTRODUCTION (only if no prior conversation):
 "Hi there this is Mark, who am I speaking with?"
 
-2. AFTER GETTING NAME:
-"Nice to meet you [First name]. [First name] welcome to the future of retirement planning.
+2. AFTER GETTING NAME (only if starting fresh):
+"Nice to meet you [First name]. I'll help you plan for retirement by asking a few quick questions."
 
-Before we get started, I'm going to ask you three simple questions about your retirement plans. This will help me provide you with personalized retirement insights.
+3. DATA COLLECTION:
+- Ask for missing information one at a time
+- Vary your questions naturally
+- Acknowledge previous answers
+- Use the person's name occasionally
 
-Let's begin..."
-
-3. DATA COLLECTION (ask these 3 questions in order):
-- "What's your birthday?"
-- "When do you plan to retire?"
-- "How much have you saved for retirement so far?"
-
-4. CLOSING (after getting all 3 pieces of information):
+4. CLOSING (only after getting all 3 pieces of information):
 "Perfect! I have all the information I need. Let me show you what I've collected..."
 
-Conversation style:
-- Be warm, friendly, and professional
-- Use the person's first name frequently once you know it
-- Ask one question at a time
-- Acknowledge their answers before moving to the next question
-- If they provide unclear information, politely ask for clarification
-- Keep responses concise and focused
+EXAMPLE VARIATIONS FOR QUESTIONS:
+Birthday:
+- "What's your birthday?"
+- "Could you tell me your date of birth?"
+- "When were you born?"
 
-Only collect these 3 pieces of information:
-1. Birthday/Date of birth
-2. Retirement date/age
-3. Current retirement savings amount
+Retirement Date:
+- "When do you plan to retire?"
+- "At what age would you like to retire?"
+- "What's your target retirement age?"
 
-Do not ask about anything else unless it's to clarify these 3 data points.`;
+Savings:
+- "How much have you saved for retirement so far?"
+- "What's your current retirement savings?"
+- "Could you share your retirement savings amount?"
+
+Remember: Each response should be unique and contextual to the conversation.`;
 
 // Data extraction prompt for structured output
 const DATA_EXTRACTION_PROMPT = `Analyze the conversation and extract retirement planning data mentioned. 
@@ -80,11 +86,17 @@ Do not extract any other financial information.`;
  */
 async function generateConversationResponse(userMessage, conversationHistory = [], extractedData = {}) {
   try {
-    // Defensive: If history is empty but extractedData is not, do not start from greeting
+    // Build conversation context
     let messages = []
-    if (conversationHistory.length === 0 && Object.keys(extractedData).length > 0) {
+
+    // If conversation exists but extractedData is empty, something went wrong
+    // Start fresh but don't repeat the greeting
+    if (conversationHistory.length > 0 && Object.keys(extractedData).length === 0) {
       messages = [
-        { role: 'system', content: 'Continue the retirement data collection conversation. Do not greet again. Only ask for missing data.' }
+        { 
+          role: 'system', 
+          content: 'Continue the retirement planning conversation naturally. Do not start over or repeat the greeting.' 
+        }
       ]
     } else {
       messages = [
@@ -97,32 +109,35 @@ async function generateConversationResponse(userMessage, conversationHistory = [
       messages.push({
         role: msg.type === 'user' ? 'user' : 'assistant',
         content: msg.content
-      });
-    });
+      })
+    })
 
     // Add current user message
-    messages.push({ role: 'user', content: userMessage });
+    messages.push({ role: 'user', content: userMessage })
 
     // Add context about what data we already have
     if (Object.keys(extractedData).length > 0) {
       const dataContext = `Current extracted data: ${JSON.stringify(extractedData, null, 2)}`;
       messages.push({
         role: 'system',
-        content: `${dataContext}\n\nUse this information to guide the conversation and ask for missing data naturally.`
-      });
+        content: `${dataContext}\n\nUse this information to guide the conversation. Only ask for missing data. Vary your questions and responses.`
+      })
     }
 
+    // Get AI response with higher temperature for more variation
     const response = await openai.chat.completions.create({
       model: 'gpt-4-turbo-preview',
       messages: messages,
       max_tokens: 200,
-      temperature: 0.7,
-    });
+      temperature: 0.8, // Increased for more variation
+      presence_penalty: 0.6, // Penalize repeating the same content
+      frequency_penalty: 0.6, // Encourage word choice variation
+    })
 
-    return response.choices[0].message.content;
+    return response.choices[0].message.content
   } catch (error) {
-    console.error('Error generating conversation response:', error);
-    throw new Error('Failed to generate AI response');
+    console.error('Error generating conversation response:', error)
+    throw new Error('Failed to generate AI response')
   }
 }
 
@@ -134,7 +149,7 @@ async function extractDataFromConversation(userMessage, conversationHistory = []
     // Combine all conversation text
     const fullConversation = conversationHistory
       .map(msg => `${msg.type}: ${msg.content}`)
-      .join('\n') + `\nuser: ${userMessage}`;
+      .join('\n') + `\nuser: ${userMessage}`
 
     const response = await openai.chat.completions.create({
       model: 'gpt-4-turbo-preview',
@@ -145,13 +160,13 @@ async function extractDataFromConversation(userMessage, conversationHistory = []
       max_tokens: 300,
       temperature: 0.1,
       response_format: { type: "json_object" }
-    });
+    })
 
-    const extractedData = JSON.parse(response.choices[0].message.content);
-    return extractedData;
+    const extractedData = JSON.parse(response.choices[0].message.content)
+    return extractedData
   } catch (error) {
-    console.error('Error extracting data:', error);
-    return {};
+    console.error('Error extracting data:', error)
+    return {}
   }
 }
 

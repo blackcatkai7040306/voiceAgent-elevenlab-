@@ -28,6 +28,8 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
 }) => {
   const [isConnected, setIsConnected] = useState<boolean | null>(null)
   const [isProcessing, setIsProcessing] = useState(false)
+
+  // Load both conversation and data from localStorage
   const [conversation, setConversation] = useState<ConversationMessage[]>(() => {
     if (typeof window !== "undefined") {
       const saved = localStorage.getItem("voiceAgentConversation")
@@ -41,8 +43,21 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
     }
     return []
   })
+
+  const [extractedData, setExtractedData] = useState<ExtractedUserData>(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("voiceAgentData")
+      if (saved) {
+        try {
+          return JSON.parse(saved)
+        } catch {
+          return {}
+        }
+      }
+    }
+    return {}
+  })
   const [isPlaying, setIsPlaying] = useState(false)
-  const [extractedData, setExtractedData] = useState<ExtractedUserData>({})
   const [currentTranscript, setCurrentTranscript] = useState("")
   const [status, setStatus] = useState<"listening" | "processing" | "speaking" | "complete" | "waiting">("waiting")
 
@@ -64,20 +79,22 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
     return () => clearInterval(interval)
   }, [])
 
-  // Persist conversation to localStorage on change
+  // Persist both conversation and data
   useEffect(() => {
     if (typeof window !== "undefined") {
       localStorage.setItem("voiceAgentConversation", JSON.stringify(conversation))
+      localStorage.setItem("voiceAgentData", JSON.stringify(extractedData))
     }
-  }, [conversation])
+  }, [conversation, extractedData])
 
-  // Clear conversation from localStorage when all data is collected
+  // Clear both when complete
   useEffect(() => {
     if (isAllDataCollected(extractedData)) {
       setStatus("complete")
       stopListeningRef.current = true
       if (typeof window !== "undefined") {
         localStorage.removeItem("voiceAgentConversation")
+        localStorage.removeItem("voiceAgentData")
       }
     }
   }, [extractedData])
@@ -121,6 +138,13 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
     return !!(data.dateOfBirth && data.retirementDate && data.currentRetirementSavings)
   }
 
+  // Helper to check for repeated responses
+  const isRepeatedResponse = (newResponse: string) => {
+    if (conversation.length === 0) return false
+    const lastResponse = conversation[conversation.length - 1]
+    return lastResponse.type === 'assistant' && lastResponse.content === newResponse
+  }
+
   // Start listening (recording)
   const startListening = async () => {
     if (stopListeningRef.current || isAllDataCollected(extractedData)) {
@@ -145,7 +169,7 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
     }
   }
 
-  // Stop listening and process audio
+  // Modified stopListening to handle conversation better
   const stopListening = async () => {
     if (!audioRecorderRef.current) return
     setStatus("processing")
@@ -153,50 +177,74 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
     setIsProcessing(true)
     try {
       const audioBlob = await audioRecorderRef.current.stop()
+      
+      // Ensure we send the full conversation history
       const result = await processVoiceInput(
         audioBlob,
-        conversation,
+        conversation,  // Send complete history
         extractedData
       )
-      if (result.success) {
+
+      if (result.success && result.transcription.trim()) {  // Only process if there's actual transcription
         setCurrentTranscript("")
+        
+        // Add user message first
         const userMessage: ConversationMessage = {
           type: "user",
           content: result.transcription,
           timestamp: new Date(),
         }
-        const aiMessage: ConversationMessage = {
-          type: "assistant",
-          content: result.aiResponse,
-          timestamp: new Date(),
-        }
-        const updatedConversation = [...conversation, userMessage, aiMessage]
-        setConversation(updatedConversation)
-        const mergedData = { ...extractedData, ...result.extractedData }
-        setExtractedData(mergedData)
-        onDataExtracted(mergedData)
-        onConversationUpdate(
-          updatedConversation.map((msg) => `${msg.type}: ${msg.content}`)
-        )
-        setStatus("speaking")
-        setIsPlaying(true)
-        await convertTextToSpeech(result.aiResponse)
-        setIsPlaying(false)
-        if (!isAllDataCollected(mergedData)) {
-          setTimeout(() => startListening(), 500)
+
+        // Check if AI response is not a repeat
+        if (!isRepeatedResponse(result.aiResponse)) {
+          const aiMessage: ConversationMessage = {
+            type: "assistant",
+            content: result.aiResponse,
+            timestamp: new Date(),
+          }
+
+          const updatedConversation = [...conversation, userMessage, aiMessage]
+          setConversation(updatedConversation)
+          
+          // Update extracted data
+          const mergedData = { ...extractedData, ...result.extractedData }
+          setExtractedData(mergedData)
+          onDataExtracted(mergedData)
+          
+          // Update parent with conversation
+          onConversationUpdate(
+            updatedConversation.map((msg) => `${msg.type}: ${msg.content}`)
+          )
+
+          // Play AI response
+          setStatus("speaking")
+          setIsPlaying(true)
+          await convertTextToSpeech(result.aiResponse)
+          setIsPlaying(false)
+
+          // Continue listening if not complete
+          if (!isAllDataCollected(mergedData)) {
+            setTimeout(() => startListening(), 500)
+          } else {
+            setStatus("complete")
+          }
         } else {
-          setStatus("complete")
+          // If response would be repeated, just continue listening
+          console.log("Prevented repeated response")
+          setTimeout(() => startListening(), 500)
         }
       } else {
-        setCurrentTranscript("")
         throw new Error(result.error || "Voice processing failed")
       }
     } catch (error) {
+      console.error("❌ Error processing voice input:", error)
       setCurrentTranscript("")
       setStatus("waiting")
-      console.error("❌ Error processing voice input:", error)
-      // Optionally, play error message
-      await convertTextToSpeech("I'm sorry, I had trouble processing that. Could you please try again?")
+      
+      // Only play error message if not already speaking
+      if (!isPlaying) {
+        await convertTextToSpeech("I'm sorry, I had trouble processing that. Could you please try again?")
+      }
       setTimeout(() => startListening(), 1000)
     } finally {
       setIsProcessing(false)
