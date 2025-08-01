@@ -26,7 +26,7 @@ export async function processVoiceInput(
     formData.append("conversationHistory", JSON.stringify(conversationHistory))
     formData.append("extractedData", JSON.stringify(extractedData))
 
-    const response = await fetch(`${API_BASE_URL}/api/voice/process`, {
+    const response = await fetch(`${API_BASE_URL}/voice/process`, {
       method: "POST",
       headers: {
         'X-Session-ID': sessionId

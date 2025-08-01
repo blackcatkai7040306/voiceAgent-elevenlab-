@@ -42,14 +42,28 @@ app.use(cors({
   origin: [
     'http://localhost:3000',
     'https://voice-agent-elevenlab.vercel.app',
-    'https://your-frontend-domain.vercel.app' // Update with your Vercel domain
+    'https://autoincome.theretirementpaycheck.com'
   ],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  allowedHeaders: [
+    'Content-Type',
+    'Authorization',
+    'X-Requested-With',
+    'X-Session-ID',
+    'X-Transcription',
+    'X-AI-Response',
+    'X-Extracted-Data'
+  ],
+  exposedHeaders: [
+    'X-Transcription',
+    'X-AI-Response',
+    'X-Extracted-Data'
+  ],
   optionsSuccessStatus: 200
 }));
 
+// Add explicit OPTIONS handler for preflight requests
 app.options('*', cors());
 
 app.use(express.json());
