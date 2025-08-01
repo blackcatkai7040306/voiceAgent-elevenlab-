@@ -26,7 +26,7 @@ export async function processVoiceInput(
     formData.append("conversationHistory", JSON.stringify(conversationHistory))
     formData.append("extractedData", JSON.stringify(extractedData))
 
-    const response = await fetch(`${API_BASE_URL}/voice/process`, {
+    const response = await fetch(`${API_BASE_URL}/api/voice/process`, {
       method: "POST",
       headers: {
         'X-Session-ID': sessionId
@@ -99,7 +99,7 @@ export async function convertTextToSpeech(
       headers['X-Session-ID'] = sessionId
     }
 
-    const response = await fetch(`${API_BASE_URL}/voice/text-to-speech`, {
+    const response = await fetch(`${API_BASE_URL}/api/voice/text-to-speech`, {
       method: "POST",
       headers,
       body: JSON.stringify({ text }),
@@ -131,7 +131,7 @@ export async function testVoiceConnection(): Promise<boolean> {
   try {
     console.log("🔍 Testing voice service connection...")
 
-    const response = await fetch(`${API_BASE_URL}/voice/test-connection`)
+    const response = await fetch(`${API_BASE_URL}/api/voice/test-connection`)
     const data = await response.json()
 
     const isConnected = data.success && data.connected
