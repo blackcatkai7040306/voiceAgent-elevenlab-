@@ -380,9 +380,9 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
                   <span className="text-sm font-medium text-gray-900">
                     {message.type === "user" ? "You" : "AI Assistant"}
                   </span>
-                  <span className="text-xs text-gray-500">
+                  {/* <span className="text-xs text-gray-500">
                     {message.timestamp.toLocaleTimeString()}
-                  </span>
+                  </span> */}
                 </div>
                 <p className="text-gray-700">{message.content}</p>
               </div>
