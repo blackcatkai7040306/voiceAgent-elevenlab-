@@ -1,241 +1,43 @@
 "use client"
 
-import React, { useState, useEffect } from "react"
-import { Bot, AlertCircle } from "lucide-react"
-import { useSearchParams } from "next/navigation"
-import { useSocket } from "@/hooks/useSocket"
-import { automationApi } from "@/lib/api"
-import { VoiceDataDisplay } from "@/components/VoiceDataDisplay"
-import { ProgressTracker } from "@/components/ProgressTracker"
-import { StatusIndicator } from "@/components/StatusIndicator"
-import { ResultsDisplay } from "@/components/ResultsDisplay"
-import {
-  AutomationStatus,
-  AutomationFormData,
-  AutomationResult,
-  ExtractedData,
-} from "@/types/automation"
-
-interface VoiceExtractedData {
-  firstName?: string
-  dateOfBirth?: string
-  retirementDate?: string
-  currentRetirementSavings?: string | number
-}
+import React, { useState } from "react"
+import { Mic, MicOff, Phone, CheckCircle, AlertCircle, Loader2 } from "lucide-react"
+import { VoiceAgent } from "@/components/VoiceAgent"
+import { ExtractedUserData } from "@/types/voiceAgent"
 
 export default function HomePage() {
-  const searchParams = useSearchParams()
-  const {
-    isConnected,
-    progress,
-    currentStep,
-    connectionError,
-    usingFallback,
-    clearProgress,
-    reconnect,
-  } = useSocket()
-  const [status, setStatus] = useState<AutomationStatus>("idle")
-  const [result, setResult] = useState<AutomationResult | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const [extractedData, setExtractedData] = useState<ExtractedData>({})
-  const [voiceData, setVoiceData] = useState<VoiceExtractedData | null>(null)
+  const [isRecording, setIsRecording] = useState(false)
+  const [extractedData, setExtractedData] = useState<ExtractedUserData>({})
+  const [conversation, setConversation] = useState<string[]>([])
+  const [isDataComplete, setIsDataComplete] = useState(false)
 
-  // Extract voice data from URL parameters
-  useEffect(() => {
-    const birthday = searchParams.get("birthday")
-    const retirementDate = searchParams.get("retirementDate")
-    const currentRetirementSavings = searchParams.get(
-      "currentRetirementSavings"
-    )
-    const firstName = searchParams.get("firstName")
+  const handleDataExtracted = (data: ExtractedUserData) => {
+    setExtractedData(data)
 
-    if (birthday || retirementDate || currentRetirementSavings) {
-      setVoiceData({
-        firstName: firstName || undefined,
-        dateOfBirth: birthday || undefined,
-        retirementDate: retirementDate || undefined,
-        currentRetirementSavings: currentRetirementSavings || undefined,
-      })
-    }
-  }, [searchParams])
-
-  // Process progress updates to extract data
-  useEffect(() => {
-    // Process all progress updates to accumulate extracted data
-    const accumulatedData: ExtractedData = {}
-
-    progress.forEach((update) => {
-      if (update.details) {
-        // Check for monthlyIncomeNet (new format)
-        if (update.details.monthlyIncomeNet) {
-          accumulatedData.monthlyIncomeNet = update.details.monthlyIncomeNet
-        }
-
-        // Check for target values (new format)
-        if (update.details.targetValue1 && update.details.targetValue2) {
-          accumulatedData.planValues = {
-            value1: update.details.targetValue1,
-            value2: update.details.targetValue2,
-            value3: update.details.referenceValue3,
-          }
-        }
-
-        // Check for startOfPlanValues object format (new format)
-        if (
-          update.details.startOfPlanValues &&
-          typeof update.details.startOfPlanValues === "object" &&
-          !Array.isArray(update.details.startOfPlanValues)
-        ) {
-          accumulatedData.planValues = {
-            value1: update.details.startOfPlanValues.value1,
-            value2: update.details.startOfPlanValues.value2,
-            value3: update.details.startOfPlanValues.value3,
-          }
-        }
-
-        // Backward compatibility - check for startOfPlanValues array format
-        if (
-          update.details.startOfPlanValues &&
-          Array.isArray(update.details.startOfPlanValues)
-        ) {
-          accumulatedData.planValues = {
-            value1: update.details.startOfPlanValues[0],
-            value2: update.details.startOfPlanValues[1],
-            value3: update.details.startOfPlanValues[2],
-          }
-        }
-      }
-    })
-
-    // Only update if we have meaningful data
-    if (accumulatedData.monthlyIncomeNet || accumulatedData.planValues) {
-      console.log("💰 Extracted data updated:", accumulatedData)
-      setExtractedData(accumulatedData)
-    } else {
-      console.log("📊 No meaningful data extracted yet:", accumulatedData)
-    }
-  }, [progress])
-
-  // Handle automation completion/failure via socket
-  useEffect(() => {
-    const lastUpdate = progress[progress.length - 1]
-    if (!lastUpdate) return
-
-    console.log("🔍 Checking last update:", lastUpdate.step, lastUpdate.status)
-
-    if (lastUpdate.status === "completed" && lastUpdate.step === "completed") {
-      console.log("🎉 Automation completed successfully via socket!")
-      setStatus("completed")
-
-      // Check for extracted data in the completion update itself or accumulated data
-      const hasExtractedData =
-        lastUpdate.details?.monthlyIncomeNet ||
-        lastUpdate.details?.planValues ||
-        extractedData.monthlyIncomeNet ||
-        extractedData.planValues
-
-      if (hasExtractedData) {
-        console.log("🚀 Auto-navigating to voice chat with results...")
-        setTimeout(() => {
-          handleContinueVoiceChat()
-        }, 2000) // Wait 2 seconds to show results first
-      } else {
-        console.log("⏳ No extracted data found, manual navigation required")
-        console.log("Completion details:", lastUpdate.details)
-        console.log("Current extracted data:", extractedData)
-      }
-    } else if (
-      lastUpdate.status === "failed" &&
-      lastUpdate.step === "automation"
-    ) {
-      console.log("❌ Automation failed via socket")
-      setStatus("error")
-    } else {
-      console.log(
-        "📊 Progress update - not completion:",
-        lastUpdate.step,
-        lastUpdate.status
-      )
-    }
-  }, [progress])
-
-  const handleStartAutomation = async (formData: AutomationFormData) => {
-    // Start automation - status will be updated via socket
-    setStatus("running")
-    setError(null)
-    setResult(null)
-    clearProgress()
-
-    // Trigger automation via API but ignore the response
-    // All progress and completion will be handled via socket
-    try {
-      console.log("🚀 Starting automation (socket-only mode)...")
-      await automationApi.startAutomation(formData)
-    } catch (err) {
-      console.log(
-        "📡 API call completed/failed - continuing with socket monitoring"
-      )
-      // Ignore API errors - socket will handle the real status
-    }
+    // Check if all required data is present
+    const isComplete =
+      data.dateOfBirth && data.retirementDate && data.currentRetirementSavings
+    setIsDataComplete(!!isComplete)
   }
 
-  const handleStopAutomation = () => {
-    setStatus("idle")
-  }
-
-  const handleClearAll = () => {
-    setStatus("idle")
-    setResult(null)
-    setError(null)
-    setExtractedData({})
-    clearProgress()
-  }
-
-  const handleRestartAutomation = () => {
-    setStatus("idle")
-    setResult(null)
-    setError(null)
-    setExtractedData({})
-    clearProgress()
-  }
-
-  const handleContinueVoiceChat = () => {
-    // Navigate back to agent page with completion status
-    const params = new URLSearchParams({
-      automationCompleted: "true",
-      monthlyIncome: extractedData.monthlyIncomeNet?.toString() || "",
-      planValue1: extractedData.planValues?.value1?.toString() || "",
-      planValue2: extractedData.planValues?.value2?.toString() || "",
-      planValue3: extractedData.planValues?.value3?.toString() || "",
-    })
-    window.location.href = `/agent?${params.toString()}`
+  const handleConversationUpdate = (conversationHistory: string[]) => {
+    setConversation(conversationHistory)
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
       {/* Header */}
       <header className="bg-white shadow-sm border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center">
-              <Bot className="w-8 h-8 text-blue-600 mr-3" />
+              <Phone className="w-8 h-8 text-indigo-600 mr-3" />
               <div>
-                <h1 className="text-xl font-bold text-gray-900">
-                  Income Conductor Automation
-                </h1>
+                <h1 className="text-xl font-bold text-gray-900">Retirement Voice Agent</h1>
                 <p className="text-sm text-gray-600">
-                  Automated financial planning workflow
+                  AI-powered retirement planning assistant
                 </p>
               </div>
-            </div>
-
-            <div className="flex items-center space-x-4">
-              <button
-                onClick={handleClearAll}
-                className="text-sm text-gray-600 hover:text-gray-900 transition-colors"
-              >
-                Clear All
-              </button>
             </div>
           </div>
         </div>
@@ -244,74 +46,115 @@ export default function HomePage() {
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {/* Left Column - Controls */}
+          {/* Left Column - Voice Agent Interface */}
           <div className="space-y-6">
-            {/* Status Indicator */}
-            <StatusIndicator
-              isConnected={isConnected}
-              status={status}
-              connectionError={connectionError}
-              onReconnect={reconnect}
+            <VoiceAgent
+              onDataExtracted={handleDataExtracted}
+              onConversationUpdate={handleConversationUpdate}
+              isRecording={isRecording}
+              setIsRecording={setIsRecording}
             />
-
-            {/* Voice Data Display */}
-            <VoiceDataDisplay
-              onStart={handleStartAutomation}
-              onStop={handleStopAutomation}
-              status={status}
-              isConnected={isConnected}
-              voiceData={voiceData || undefined}
-            />
-
-            {/* Error Display - Hidden from users */}
           </div>
 
-          {/* Right Column - Progress & Results */}
+          {/* Right Column - Extracted Data Display */}
           <div className="space-y-6">
-            {/* Progress Tracker */}
-            <ProgressTracker
-              progress={progress}
-              status={status}
-              currentStep={currentStep}
-            />
+            {/* Data Status */}
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                {isDataComplete ? (
+                  <CheckCircle className="w-5 h-5 mr-2 text-green-500" />
+                ) : (
+                  <AlertCircle className="w-5 h-5 mr-2 text-yellow-500" />
+                )}
+                Extracted Data
+              </h3>
+              
+              <div className="space-y-4">
+                <div className="flex items-center justify-between p-3 rounded-lg border">
+                  <span className="text-sm font-medium text-gray-700">First Name</span>
+                  <span className="text-sm text-gray-900">
+                    {extractedData.firstName || "Not provided"}
+                  </span>
+                </div>
+                
+                <div className="flex items-center justify-between p-3 rounded-lg border">
+                  <span className="text-sm font-medium text-gray-700">Date of Birth</span>
+                  <span className="text-sm text-gray-900">
+                    {extractedData.dateOfBirth || "Not provided"}
+                  </span>
+                </div>
+                
+                <div className="flex items-center justify-between p-3 rounded-lg border">
+                  <span className="text-sm font-medium text-gray-700">Retirement Date</span>
+                  <span className="text-sm text-gray-900">
+                    {extractedData.retirementDate || "Not provided"}
+                  </span>
+                </div>
+                
+                <div className="flex items-center justify-between p-3 rounded-lg border">
+                  <span className="text-sm font-medium text-gray-700">Current Savings</span>
+                  <span className="text-sm text-gray-900">
+                    {extractedData.currentRetirementSavings 
+                      ? `$${extractedData.currentRetirementSavings.toLocaleString()}`
+                      : "Not provided"
+                    }
+                  </span>
+                </div>
+              </div>
 
-            {/* Results Display */}
-            <ResultsDisplay
-              result={result}
-              extractedData={extractedData}
-              onRestart={handleRestartAutomation}
-              onContinueVoiceChat={handleContinueVoiceChat}
-              showRestart={status === "completed"}
-            />
+              {isDataComplete && (
+                <div className="mt-6 p-4 bg-green-50 border border-green-200 rounded-lg">
+                  <div className="flex items-center">
+                    <CheckCircle className="w-5 h-5 text-green-500 mr-2" />
+                    <span className="text-green-800 font-medium">
+                      All required data collected!
+                    </span>
+                  </div>
+                  <p className="text-green-700 text-sm mt-1">
+                    Your retirement information has been successfully extracted.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Conversation History */}
+            {conversation.length > 0 && (
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                  Conversation History
+                </h3>
+                <div className="space-y-3 max-h-96 overflow-y-auto">
+                  {conversation.map((message, index) => (
+                    <div
+                      key={index}
+                      className="p-3 rounded-lg bg-gray-50 text-sm text-gray-700"
+                    >
+                      {message}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
         {/* Instructions */}
-        <div className="mt-12 card">
+        <div className="mt-12 bg-white rounded-lg shadow-sm border border-gray-200 p-6">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">
-            How to Use
+            How to Use the Voice Agent
           </h3>
           <div className="prose prose-sm text-gray-600">
             <ol className="list-decimal list-inside space-y-2">
-              <li>Ensure the automation server is running on port 3001</li>
-              <li>Wait for the connection indicator to show "Connected"</li>
-              <li>Configure any advanced settings if needed</li>
-              <li>
-                Click "Start Automation" to begin the Income Conductor workflow
-              </li>
-              <li>
-                Monitor real-time progress updates in the progress tracker
-              </li>
-              <li>
-                View extracted data and results when the automation completes
-              </li>
+              <li>Click the microphone button to start talking with the AI assistant</li>
+              <li>Share your retirement planning information naturally in conversation</li>
+              <li>The agent will extract your Date of Birth, Retirement Date, and Current Savings</li>
+              <li>Once all data is collected, you'll see a green checkmark indicating completion</li>
             </ol>
 
-            <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+            <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
               <p className="text-blue-800 text-sm">
-                <strong>Note:</strong> The automation will automatically
-                navigate through the Income Conductor website, update client
-                information, and extract financial planning data.
+                <strong>Example:</strong> "Hi, I'm John. I was born on March 15th, 1980. 
+                I plan to retire at age 65 and I currently have $250,000 saved for retirement."
               </p>
             </div>
           </div>

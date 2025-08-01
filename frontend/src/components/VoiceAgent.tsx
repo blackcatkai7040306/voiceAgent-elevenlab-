@@ -5,14 +5,9 @@ import {
   Mic,
   MicOff,
   Volume2,
-  VolumeX,
-  MessageCircle,
-  Brain,
   Loader2,
   CheckCircle,
   AlertCircle,
-  Send,
-  Type,
 } from "lucide-react"
 import {
   VoiceAgentProps,
@@ -36,10 +31,7 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
   const [isProcessing, setIsProcessing] = useState(false)
   const [conversation, setConversation] = useState<ConversationMessage[]>([])
   const [isPlaying, setIsPlaying] = useState(false)
-  const [followUpQuestions, setFollowUpQuestions] = useState<string[]>([])
   const [extractedData, setExtractedData] = useState<ExtractedUserData>({})
-  const [textInput, setTextInput] = useState("")
-  const [inputMode, setInputMode] = useState<"voice" | "text">("voice")
   const [currentTranscript, setCurrentTranscript] = useState("")
 
   const audioRecorderRef = useRef<{
@@ -79,8 +71,7 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
       convertTextToSpeech(initialGreeting).then((success) => {
         if (success) {
           setIsPlaying(true)
-          // Note: The voice API handles playing audio automatically
-          setTimeout(() => setIsPlaying(false), 2000) // Estimate duration for shorter greeting
+          setTimeout(() => setIsPlaying(false), 2000)
         }
       })
     }
@@ -160,11 +151,9 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
         setConversation(updatedConversation)
 
         // Update extracted data
-        setExtractedData(result.extractedData)
-        onDataExtracted(result.extractedData)
-
-        // Set follow-up questions
-        setFollowUpQuestions(result.followUpQuestions)
+        const mergedData = { ...extractedData, ...result.extractedData }
+        setExtractedData(mergedData)
+        onDataExtracted(mergedData)
 
         // Update parent with conversation
         onConversationUpdate(
@@ -173,8 +162,7 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
 
         // Audio is automatically played by the voice API
         setIsPlaying(true)
-        // Estimate audio duration and reset playing state
-        setTimeout(() => setIsPlaying(false), result.aiResponse.length * 50) // Rough estimate
+        setTimeout(() => setIsPlaying(false), result.aiResponse.length * 50)
       } else {
         setCurrentTranscript("")
         throw new Error(result.error || "Voice processing failed")
@@ -211,175 +199,6 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
       await stopRecording()
     } else {
       await startRecording()
-    }
-  }
-
-  const handleTextSubmit = async () => {
-    if (!textInput.trim()) return
-
-    setIsProcessing(true)
-
-    // Add user message to conversation
-    const userMessage: ConversationMessage = {
-      type: "user",
-      content: textInput,
-      timestamp: new Date(),
-    }
-
-    const updatedConversation = [...conversation, userMessage]
-    setConversation(updatedConversation)
-
-    try {
-      // Create a temporary audio blob from text (we could record the user speaking this, but for simplicity, we'll simulate)
-      // In a real implementation, you might want to create a separate text processing endpoint
-      // For now, we'll use the existing OpenAI conversation API
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_SERVER_URL}/conversation`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            userMessage: textInput,
-            conversationHistory: updatedConversation,
-            extractedData: extractedData,
-          }),
-        }
-      )
-
-      if (!response.ok) {
-        throw new Error("Failed to process text input")
-      }
-
-      const result = await response.json()
-
-      if (result.success) {
-        // Update extracted data
-        const mergedData = { ...extractedData, ...result.extractedData }
-        setExtractedData(mergedData)
-        onDataExtracted(mergedData)
-
-        // Set follow-up questions
-        setFollowUpQuestions(result.followUpQuestions || [])
-
-        // Add AI response to conversation
-        const aiMessage: ConversationMessage = {
-          type: "assistant",
-          content: result.aiResponse,
-          timestamp: new Date(),
-        }
-
-        const finalConversation = [...updatedConversation, aiMessage]
-        setConversation(finalConversation)
-        onConversationUpdate(
-          finalConversation.map((msg) => `${msg.type}: ${msg.content}`)
-        )
-
-        // Convert AI response to speech
-        const speechSuccess = await convertTextToSpeech(result.aiResponse)
-        if (speechSuccess) {
-          setIsPlaying(true)
-          setTimeout(() => setIsPlaying(false), result.aiResponse.length * 50)
-        }
-      } else {
-        throw new Error(result.error || "Failed to process conversation")
-      }
-    } catch (error) {
-      console.error("Error processing text input:", error)
-
-      const fallbackResponse =
-        "I'm sorry, I had trouble processing that. Could you please try again?"
-
-      const aiMessage: ConversationMessage = {
-        type: "assistant",
-        content: fallbackResponse,
-        timestamp: new Date(),
-      }
-
-      const finalConversation = [...updatedConversation, aiMessage]
-      setConversation(finalConversation)
-      onConversationUpdate(
-        finalConversation.map((msg) => `${msg.type}: ${msg.content}`)
-      )
-
-      convertTextToSpeech(fallbackResponse)
-    } finally {
-      setIsProcessing(false)
-      setTextInput("")
-    }
-  }
-
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault()
-      handleTextSubmit()
-    }
-  }
-
-  const handleFollowUpClick = async (question: string) => {
-    if (inputMode === "text") {
-      setTextInput(question)
-    } else {
-      // For voice mode, we can auto-process the question
-      setIsProcessing(true)
-
-      const userMessage: ConversationMessage = {
-        type: "user",
-        content: question,
-        timestamp: new Date(),
-      }
-
-      const updatedConversation = [...conversation, userMessage]
-      setConversation(updatedConversation)
-
-      try {
-        const response = await fetch(
-          `${process.env.NEXT_PUBLIC_SERVER_URL}/conversation`,
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              userMessage: question,
-              conversationHistory: updatedConversation,
-              extractedData: extractedData,
-            }),
-          }
-        )
-
-        const result = await response.json()
-
-        if (result.success) {
-          const mergedData = { ...extractedData, ...result.extractedData }
-          setExtractedData(mergedData)
-          onDataExtracted(mergedData)
-          setFollowUpQuestions(result.followUpQuestions || [])
-
-          const aiMessage: ConversationMessage = {
-            type: "assistant",
-            content: result.aiResponse,
-            timestamp: new Date(),
-          }
-
-          const finalConversation = [...updatedConversation, aiMessage]
-          setConversation(finalConversation)
-          onConversationUpdate(
-            finalConversation.map((msg) => `${msg.type}: ${msg.content}`)
-          )
-
-          const speechSuccess = await convertTextToSpeech(result.aiResponse)
-          if (speechSuccess) {
-            setIsPlaying(true)
-            setTimeout(() => setIsPlaying(false), result.aiResponse.length * 50)
-          }
-        }
-      } catch (error) {
-        console.error("Error processing follow-up question:", error)
-      } finally {
-        setIsProcessing(false)
-      }
     }
   }
 
@@ -448,155 +267,49 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
         )}
       </div>
 
-      {/* Input Mode Toggle */}
+      {/* Voice Input Controls */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-        <div className="flex items-center justify-center space-x-4 mb-4">
+        <div className="flex items-center justify-center space-x-4">
           <button
-            onClick={() => setInputMode("voice")}
-            className={`flex items-center px-4 py-2 rounded-lg transition-colors ${
-              inputMode === "voice"
-                ? "bg-blue-500 text-white"
-                : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+            onClick={toggleRecording}
+            disabled={!isConnected || isProcessing}
+            className={`flex items-center justify-center w-16 h-16 rounded-full transition-all duration-200 ${
+              isRecording
+                ? "bg-red-500 hover:bg-red-600 text-white"
+                : "bg-blue-500 hover:bg-blue-600 text-white disabled:bg-gray-400"
             }`}
           >
-            <Mic className="w-4 h-4 mr-2" />
-            Voice Input
+            {isRecording ? (
+              <MicOff className="w-8 h-8" />
+            ) : (
+              <Mic className="w-8 h-8" />
+            )}
           </button>
-          <button
-            onClick={() => setInputMode("text")}
-            className={`flex items-center px-4 py-2 rounded-lg transition-colors ${
-              inputMode === "text"
-                ? "bg-blue-500 text-white"
-                : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-            }`}
-          >
-            <Type className="w-4 h-4 mr-2" />
-            Text Input
-          </button>
+
+          <div className="text-center">
+            <p className="text-sm font-medium text-gray-900">
+              {isRecording ? "Recording..." : "Click to Record"}
+            </p>
+            <p className="text-xs text-gray-500">
+              {isProcessing && "Processing with AI..."}
+              {isPlaying && "Speaking response..."}
+            </p>
+          </div>
+
+          <div className="w-16 h-16 flex items-center justify-center">
+            {isProcessing && (
+              <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+            )}
+            {isPlaying && <Volume2 className="w-8 h-8 text-green-500" />}
+          </div>
         </div>
-
-        {inputMode === "voice" ? (
-          // Voice Input Controls
-          <div className="flex items-center justify-center space-x-4">
-            <button
-              onClick={toggleRecording}
-              disabled={!isConnected || isProcessing}
-              className={`flex items-center justify-center w-16 h-16 rounded-full transition-all duration-200 ${
-                isRecording
-                  ? "bg-red-500 hover:bg-red-600 text-white"
-                  : "bg-blue-500 hover:bg-blue-600 text-white disabled:bg-gray-400"
-              }`}
-            >
-              {isRecording ? (
-                <MicOff className="w-8 h-8" />
-              ) : (
-                <Mic className="w-8 h-8" />
-              )}
-            </button>
-
-            <div className="text-center">
-              <p className="text-sm font-medium text-gray-900">
-                {isRecording ? "Recording..." : "Click to Record"}
-              </p>
-              <p className="text-xs text-gray-500">
-                {isProcessing && "Processing with AI..."}
-                {isPlaying && "Speaking response..."}
-              </p>
-            </div>
-
-            <div className="w-16 h-16 flex items-center justify-center">
-              {isProcessing && (
-                <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
-              )}
-              {isPlaying && <Volume2 className="w-8 h-8 text-green-500" />}
-            </div>
-          </div>
-        ) : (
-          // Text Input Controls
-          <div className="flex items-center space-x-3">
-            <textarea
-              value={textInput}
-              onChange={(e) => setTextInput(e.target.value)}
-              onKeyPress={handleKeyPress}
-              placeholder="Type your message here..."
-              disabled={isProcessing}
-              className="flex-1 p-3 border border-gray-300 rounded-lg resize-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50"
-              rows={2}
-            />
-            <button
-              onClick={handleTextSubmit}
-              disabled={!textInput.trim() || isProcessing}
-              className="flex items-center justify-center w-12 h-12 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:bg-gray-400 transition-colors"
-            >
-              {isProcessing ? (
-                <Loader2 className="w-5 h-5 animate-spin" />
-              ) : (
-                <Send className="w-5 h-5" />
-              )}
-            </button>
-          </div>
-        )}
       </div>
 
       {/* Live Transcript */}
-      {currentTranscript && inputMode === "voice" && (
+      {currentTranscript && (
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
           <h4 className="text-sm font-medium text-gray-900 mb-2">Status:</h4>
           <p className="text-gray-700 italic">"{currentTranscript}"</p>
-        </div>
-      )}
-
-      {/* Follow-up Questions */}
-      {followUpQuestions.length > 0 && (
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-            <Brain className="w-5 h-5 mr-2" />
-            Suggested Questions
-          </h4>
-          <div className="space-y-2">
-            {followUpQuestions.map((question, index) => (
-              <button
-                key={index}
-                onClick={() => handleFollowUpClick(question)}
-                disabled={isProcessing}
-                className="w-full text-left p-3 rounded-lg border border-gray-200 hover:bg-blue-50 hover:border-blue-300 transition-colors disabled:opacity-50"
-              >
-                <p className="text-gray-700">{question}</p>
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Conversation History */}
-      {conversation.length > 0 && (
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-            <MessageCircle className="w-5 h-5 mr-2" />
-            Conversation
-          </h4>
-          <div className="space-y-4 max-h-96 overflow-y-auto">
-            {conversation.map((message, index) => (
-              <div
-                key={index}
-                className={`p-3 rounded-lg ${
-                  message.type === "user"
-                    ? "bg-blue-50 border-l-4 border-blue-500"
-                    : "bg-green-50 border-l-4 border-green-500"
-                }`}
-              >
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-sm font-medium text-gray-900">
-                    {message.type === "user" ? "You" : "AI Assistant"}
-                  </span>
-                  <span className="text-xs text-gray-500">
-                    {message.timestamp.toLocaleTimeString()}
-                  </span>
-                </div>
-                <p className="text-gray-700">{message.content}</p>
-              </div>
-            ))}
-          </div>
         </div>
       )}
     </div>

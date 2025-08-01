@@ -1,11 +1,10 @@
-const API_BASE_URL = process.env.NEXT_PUBLIC_SOCKET_URL
+const API_BASE_URL = process.env.NEXT_PUBLIC_SERVER_URL
 
 export interface VoiceProcessingResponse {
   success: boolean
   transcription: string
   aiResponse: string
   extractedData: any
-  followUpQuestions: string[]
   error?: string
 }
 
@@ -44,16 +43,10 @@ export async function processVoiceInput(
       response.headers.get("X-AI-Response") || ""
     )
     const extractedDataHeader = response.headers.get("X-Extracted-Data")
-    const followUpQuestionsHeader = response.headers.get(
-      "X-Follow-Up-Questions"
-    )
 
     const parsedExtractedData = extractedDataHeader
       ? JSON.parse(decodeURIComponent(extractedDataHeader))
       : {}
-    const parsedFollowUpQuestions = followUpQuestionsHeader
-      ? JSON.parse(decodeURIComponent(followUpQuestionsHeader))
-      : []
 
     // Get audio data
     const audioBuffer = await response.arrayBuffer()
@@ -72,7 +65,6 @@ export async function processVoiceInput(
       transcription,
       aiResponse,
       extractedData: parsedExtractedData,
-      followUpQuestions: parsedFollowUpQuestions,
     }
   } catch (error) {
     console.error("❌ Voice processing error:", error)
@@ -81,7 +73,6 @@ export async function processVoiceInput(
       transcription: "",
       aiResponse: "",
       extractedData: {},
-      followUpQuestions: [],
       error: error instanceof Error ? error.message : "Unknown error",
     }
   }
