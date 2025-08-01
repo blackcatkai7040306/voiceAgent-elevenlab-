@@ -75,6 +75,30 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
       : `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
   )
 
+  // Add ref to track audio context
+  const audioContextRef = useRef<AudioContext | null>(null);
+
+  // Function to ensure audio context is closed
+  const cleanupAudio = async () => {
+    if (audioContextRef.current) {
+      await audioContextRef.current.close();
+      audioContextRef.current = null;
+    }
+  };
+
+  // Modified convertTextToSpeech wrapper
+  const playResponse = async (text: string) => {
+    try {
+      setStatus("speaking");
+      setIsPlaying(true);
+      await cleanupAudio(); // Ensure previous audio is cleaned up
+      await convertTextToSpeech(text);
+    } finally {
+      setIsPlaying(false);
+      setStatus("waiting"); // Reset status after speaking
+    }
+  };
+
   // Test voice service connection on component mount
   useEffect(() => {
     async function checkVoiceConnection() {
@@ -126,13 +150,10 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
       }
       setConversation([greetingMessage])
       onConversationUpdate([`assistant: ${initialGreeting}`])
-      setStatus("speaking")
-      setIsPlaying(true)
-      await convertTextToSpeech(initialGreeting)
-      setIsPlaying(false)
-      // Start listening after greeting
-      await new Promise(resolve => setTimeout(resolve, 500)) // Small delay
-      await startListening()
+      
+      await playResponse(initialGreeting);
+      await new Promise(resolve => setTimeout(resolve, 500));
+      await startListening();
     } else {
       // Resume from existing conversation
       if (!isAllDataCollected(extractedData)) {
@@ -144,127 +165,126 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
   // Start listening (recording)
   const startListening = async () => {
     if (!hasStarted || stopListeningRef.current || isAllDataCollected(extractedData)) {
-      return
+      return;
+    }
+
+    // Don't start listening if we're still speaking
+    if (isPlaying) {
+      setTimeout(() => startListening(), 500);
+      return;
     }
 
     // Ensure we're not already recording
     if (audioRecorderRef.current?.isRecording()) {
-      return
+      return;
     }
 
-    setStatus("listening")
-    setCurrentTranscript("Listening...")
+    await cleanupAudio(); // Ensure audio context is cleaned up
+    setStatus("listening");
+    setCurrentTranscript("Listening...");
+
     try {
-      audioRecorderRef.current = await recordAudio()
-      audioRecorderRef.current.start()
+      audioRecorderRef.current = await recordAudio();
+      audioRecorderRef.current.start();
       
       // Automatically stop after 6 seconds
       setTimeout(async () => {
         if (audioRecorderRef.current?.isRecording()) {
-          await stopListening()
+          await stopListening();
         }
-      }, 6000)
+      }, 6000);
     } catch (error) {
-      console.error("❌ Error starting recording:", error)
-      setStatus("waiting")
-      setCurrentTranscript("")
-      // Try to restart listening after error
-      setTimeout(async () => {
-        if (!stopListeningRef.current && !isAllDataCollected(extractedData)) {
-          await startListening()
-        }
-      }, 1000)
+      console.error("❌ Error starting recording:", error);
+      setStatus("waiting");
+      setCurrentTranscript("");
+      if (!stopListeningRef.current && !isAllDataCollected(extractedData)) {
+        setTimeout(() => startListening(), 1000);
+      }
     }
-  }
+  };
 
   // Stop listening and process audio
   const stopListening = async () => {
-    if (!audioRecorderRef.current) return
+    if (!audioRecorderRef.current) return;
     
     try {
-      setStatus("processing")
-      setCurrentTranscript("Processing...")
-      setIsProcessing(true)
+      setStatus("processing");
+      setCurrentTranscript("Processing...");
+      setIsProcessing(true);
 
-      const audioBlob = await audioRecorderRef.current.stop()
-      audioRecorderRef.current = null // Clear recorder immediately
+      const audioBlob = await audioRecorderRef.current.stop();
+      audioRecorderRef.current = null;
 
       const result = await processVoiceInput(
         audioBlob,
         conversation,
         extractedData,
         sessionId.current
-      )
+      );
 
       if (result.success && result.transcription.trim()) {
-        setCurrentTranscript("")
+        setCurrentTranscript("");
         const userMessage: ConversationMessage = {
           type: "user",
           content: result.transcription,
           timestamp: new Date(),
-        }
+        };
         const aiMessage: ConversationMessage = {
           type: "assistant",
           content: result.aiResponse,
           timestamp: new Date(),
-        }
+        };
 
-        const updatedConversation = [...conversation, userMessage, aiMessage]
-        setConversation(updatedConversation)
-        const mergedData = { ...extractedData, ...result.extractedData }
-        setExtractedData(mergedData)
-        onDataExtracted(mergedData)
+        const updatedConversation = [...conversation, userMessage, aiMessage];
+        setConversation(updatedConversation);
+        const mergedData = { ...extractedData, ...result.extractedData };
+        setExtractedData(mergedData);
+        onDataExtracted(mergedData);
         onConversationUpdate(
           updatedConversation.map((msg) => `${msg.type}: ${msg.content}`)
-        )
+        );
 
-        // Play AI response
-        setStatus("speaking")
-        setIsPlaying(true)
-        await convertTextToSpeech(result.aiResponse)
-        setIsPlaying(false)
-
-        // Continue listening if not complete
+        // Play AI response and then start listening again
+        await playResponse(result.aiResponse);
+        
         if (!isAllDataCollected(mergedData)) {
-          await new Promise(resolve => setTimeout(resolve, 500)) // Small delay
-          await startListening()
+          await new Promise(resolve => setTimeout(resolve, 500));
+          await startListening();
         } else {
-          setStatus("complete")
+          setStatus("complete");
         }
       } else {
-        throw new Error(result.error || "Voice processing failed")
+        throw new Error(result.error || "Voice processing failed");
       }
     } catch (error) {
-      console.error("❌ Error processing voice input:", error)
-      setCurrentTranscript("")
-      setStatus("waiting")
+      console.error("❌ Error processing voice input:", error);
+      setCurrentTranscript("");
+      setStatus("waiting");
       
       if (!isPlaying) {
-        setIsPlaying(true)
-        await convertTextToSpeech("I'm sorry, I had trouble processing that. Could you please try again?")
-        setIsPlaying(false)
+        await playResponse("I'm sorry, I had trouble processing that. Could you please try again?");
       }
 
-      // Try to restart listening after error
       if (!isAllDataCollected(extractedData)) {
-        await new Promise(resolve => setTimeout(resolve, 1000))
-        await startListening()
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        await startListening();
       }
     } finally {
-      setIsProcessing(false)
-      audioRecorderRef.current = null
+      setIsProcessing(false);
+      audioRecorderRef.current = null;
     }
-  }
+  };
 
   // Clean up on unmount
   useEffect(() => {
     return () => {
-      stopListeningRef.current = true
+      stopListeningRef.current = true;
       if (audioRecorderRef.current?.isRecording()) {
-        audioRecorderRef.current.stop()
+        audioRecorderRef.current.stop();
       }
-    }
-  }, [])
+      cleanupAudio();
+    };
+  }, []);
 
   return (
     <div className="space-y-6">
