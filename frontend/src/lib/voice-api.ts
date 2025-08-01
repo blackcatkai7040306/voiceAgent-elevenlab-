@@ -99,7 +99,7 @@ export async function convertTextToSpeech(
       headers['X-Session-ID'] = sessionId
     }
 
-    const response = await fetch(`${API_BASE_URL}/api/voice/text-to-speech`, {
+    const response = await fetch(`${API_BASE_URL}/voice/text-to-speech`, {
       method: "POST",
       headers,
       body: JSON.stringify({ text }),
