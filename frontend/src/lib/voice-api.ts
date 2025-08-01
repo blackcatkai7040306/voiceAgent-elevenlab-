@@ -119,7 +119,7 @@ export async function testVoiceConnection(): Promise<boolean> {
   try {
     console.log("🔍 Testing voice service connection...")
 
-    const response = await fetch(`${API_BASE_URL}/api/voice/test-connection`)
+    const response = await fetch(`${API_BASE_URL}/voice/test-connection`)
     const data = await response.json()
 
     const isConnected = data.success && data.connected
