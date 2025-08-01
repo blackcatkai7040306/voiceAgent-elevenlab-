@@ -21,6 +21,19 @@ const {
 const app = express();
 const PORT = process.env.PORT || 3001;
 
+// In-memory session storage (replace with Redis in production)
+const sessions = new Map();
+
+// Clean up old sessions periodically (30 minutes)
+setInterval(() => {
+  const now = Date.now();
+  for (const [sessionId, session] of sessions.entries()) {
+    if (now - session.lastAccessed > 30 * 60 * 1000) {
+      sessions.delete(sessionId);
+    }
+  }
+}, 5 * 60 * 1000);
+
 // ============================================
 // MIDDLEWARE SETUP
 // ============================================
@@ -72,13 +85,37 @@ app.post('/api/voice/process', upload.single('audio'), async (req, res) => {
 
     console.log('🎙️ Processing voice input...');
     
+    const sessionId = req.headers['x-session-id'];
+    if (!sessionId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Session ID is required'
+      });
+    }
+
+    // Get or create session
+    let session = sessions.get(sessionId);
+    if (!session) {
+      session = {
+        conversationHistory: [],
+        extractedData: {},
+        lastAccessed: Date.now()
+      };
+      sessions.set(sessionId, session);
+    }
+    session.lastAccessed = Date.now();
+
     const { conversationHistory = [], extractedData = {} } = req.body;
-    const parsedHistory = typeof conversationHistory === 'string' 
+    
+    // Merge frontend state with session state (frontend takes precedence)
+    const mergedHistory = typeof conversationHistory === 'string' 
       ? JSON.parse(conversationHistory) 
       : conversationHistory;
-    const parsedData = typeof extractedData === 'string' 
-      ? JSON.parse(extractedData) 
-      : extractedData;
+    
+    const mergedData = {
+      ...session.extractedData,
+      ...(typeof extractedData === 'string' ? JSON.parse(extractedData) : extractedData)
+    };
 
     // Step 1: Convert speech to text using Deepgram
     const transcription = await speechToText(req.file.buffer, req.file.originalname);
@@ -92,21 +129,43 @@ app.post('/api/voice/process', upload.single('audio'), async (req, res) => {
 
     console.log('📝 Transcription:', transcription);
 
+    // Check for duplicate transcription in session history
+    const isDuplicate = session.conversationHistory.some(
+      msg => msg.type === 'user' && msg.content === transcription
+    );
+
+    if (isDuplicate) {
+      return res.status(200).json({
+        success: true,
+        transcription: '',
+        aiResponse: '',
+        extractedData: mergedData
+      });
+    }
+
     // Step 2: Generate AI response using OpenAI
     const aiResponse = await generateConversationResponse(
       transcription,
-      parsedHistory,
-      parsedData
+      mergedHistory,
+      mergedData
     );
 
     // Step 3: Extract any new data from the conversation
     const newExtractedData = await extractDataFromConversation(
       transcription,
-      parsedHistory
+      mergedHistory
     );
 
-    // Merge with existing data
-    const mergedData = { ...parsedData, ...newExtractedData };
+    // Merge all data
+    const finalData = { ...mergedData, ...newExtractedData };
+
+    // Update session state
+    session.conversationHistory = [
+      ...mergedHistory,
+      { type: 'user', content: transcription },
+      { type: 'assistant', content: aiResponse }
+    ];
+    session.extractedData = finalData;
 
     // Step 4: Convert AI response to speech using ElevenLabs
     const audioBuffer = await textToSpeech(aiResponse);
@@ -116,7 +175,7 @@ app.post('/api/voice/process', upload.single('audio'), async (req, res) => {
       'Content-Type': 'audio/mpeg',
       'X-Transcription': encodeURIComponent(transcription),
       'X-AI-Response': encodeURIComponent(aiResponse),
-      'X-Extracted-Data': encodeURIComponent(JSON.stringify(mergedData)),
+      'X-Extracted-Data': encodeURIComponent(JSON.stringify(finalData)),
       'Access-Control-Expose-Headers': 'X-Transcription,X-AI-Response,X-Extracted-Data'
     });
 

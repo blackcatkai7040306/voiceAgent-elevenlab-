@@ -15,7 +15,8 @@ export interface VoiceProcessingResponse {
 export async function processVoiceInput(
   audioBlob: Blob,
   conversationHistory: any[] = [],
-  extractedData: any = {}
+  extractedData: any = {},
+  sessionId: string
 ): Promise<VoiceProcessingResponse> {
   try {
     console.log("🎙️ Sending voice input to backend for processing...")
@@ -25,8 +26,11 @@ export async function processVoiceInput(
     formData.append("conversationHistory", JSON.stringify(conversationHistory))
     formData.append("extractedData", JSON.stringify(extractedData))
 
-    const response = await fetch(`${API_BASE_URL}/voice/process`, {
+    const response = await fetch(`${API_BASE_URL}/api/voice/process`, {
       method: "POST",
+      headers: {
+        'X-Session-ID': sessionId
+      },
       body: formData,
     })
 
@@ -81,15 +85,23 @@ export async function processVoiceInput(
 /**
  * Convert text to speech using backend
  */
-export async function convertTextToSpeech(text: string): Promise<boolean> {
+export async function convertTextToSpeech(
+  text: string,
+  sessionId?: string
+): Promise<boolean> {
   try {
     console.log("🔊 Converting text to speech via backend...")
 
-    const response = await fetch(`${API_BASE_URL}/voice/text-to-speech`, {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    }
+    if (sessionId) {
+      headers['X-Session-ID'] = sessionId
+    }
+
+    const response = await fetch(`${API_BASE_URL}/api/voice/text-to-speech`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers,
       body: JSON.stringify({ text }),
     })
 

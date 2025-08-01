@@ -20,19 +20,37 @@ import {
   recordAudio,
 } from "@/lib/voice-api"
 
+// Generate a unique session ID
+function generateSessionId() {
+  return `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+}
+
 export const VoiceAgent: React.FC<VoiceAgentProps> = ({
   onDataExtracted,
   onConversationUpdate,
   isRecording: _isRecording,
   setIsRecording: _setIsRecording,
 }) => {
+  // Add session ID
+  const sessionId = useRef(
+    typeof window !== "undefined" 
+      ? localStorage.getItem("voiceAgentSessionId") || generateSessionId()
+      : generateSessionId()
+  )
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("voiceAgentSessionId", sessionId.current)
+    }
+  }, [])
+
   const [isConnected, setIsConnected] = useState<boolean | null>(null)
   const [isProcessing, setIsProcessing] = useState(false)
 
-  // Load both conversation and data from localStorage
+  // Load conversation with session ID
   const [conversation, setConversation] = useState<ConversationMessage[]>(() => {
     if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("voiceAgentConversation")
+      const saved = localStorage.getItem(`voiceAgentConversation_${sessionId.current}`)
       if (saved) {
         try {
           return JSON.parse(saved)
@@ -44,9 +62,10 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
     return []
   })
 
+  // Load extracted data with session ID
   const [extractedData, setExtractedData] = useState<ExtractedUserData>(() => {
     if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("voiceAgentData")
+      const saved = localStorage.getItem(`voiceAgentData_${sessionId.current}`)
       if (saved) {
         try {
           return JSON.parse(saved)
@@ -79,22 +98,23 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
     return () => clearInterval(interval)
   }, [])
 
-  // Persist both conversation and data
+  // Persist with session ID
   useEffect(() => {
     if (typeof window !== "undefined") {
-      localStorage.setItem("voiceAgentConversation", JSON.stringify(conversation))
-      localStorage.setItem("voiceAgentData", JSON.stringify(extractedData))
+      localStorage.setItem(`voiceAgentConversation_${sessionId.current}`, JSON.stringify(conversation))
+      localStorage.setItem(`voiceAgentData_${sessionId.current}`, JSON.stringify(extractedData))
     }
   }, [conversation, extractedData])
 
-  // Clear both when complete
+  // Clear with session ID
   useEffect(() => {
     if (isAllDataCollected(extractedData)) {
       setStatus("complete")
       stopListeningRef.current = true
       if (typeof window !== "undefined") {
-        localStorage.removeItem("voiceAgentConversation")
-        localStorage.removeItem("voiceAgentData")
+        localStorage.removeItem(`voiceAgentConversation_${sessionId.current}`)
+        localStorage.removeItem(`voiceAgentData_${sessionId.current}`)
+        localStorage.removeItem("voiceAgentSessionId")
       }
     }
   }, [extractedData])
@@ -169,7 +189,7 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
     }
   }
 
-  // Modified stopListening to handle conversation better
+  // Modified stopListening to prevent duplicate messages
   const stopListening = async () => {
     if (!audioRecorderRef.current) return
     setStatus("processing")
@@ -178,59 +198,64 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
     try {
       const audioBlob = await audioRecorderRef.current.stop()
       
-      // Ensure we send the full conversation history
       const result = await processVoiceInput(
         audioBlob,
-        conversation,  // Send complete history
-        extractedData
+        conversation,
+        extractedData,
+        sessionId.current // Pass session ID to backend
       )
 
-      if (result.success && result.transcription.trim()) {  // Only process if there's actual transcription
+      if (result.success && result.transcription.trim()) {
         setCurrentTranscript("")
         
-        // Add user message first
-        const userMessage: ConversationMessage = {
-          type: "user",
-          content: result.transcription,
-          timestamp: new Date(),
-        }
+        // Check if this transcription is already in conversation
+        const isDuplicateTranscription = conversation.some(
+          msg => msg.type === "user" && msg.content === result.transcription
+        )
 
-        // Check if AI response is not a repeat
-        if (!isRepeatedResponse(result.aiResponse)) {
-          const aiMessage: ConversationMessage = {
-            type: "assistant",
-            content: result.aiResponse,
+        if (!isDuplicateTranscription) {
+          const userMessage: ConversationMessage = {
+            type: "user",
+            content: result.transcription,
             timestamp: new Date(),
           }
 
-          const updatedConversation = [...conversation, userMessage, aiMessage]
-          setConversation(updatedConversation)
-          
-          // Update extracted data
-          const mergedData = { ...extractedData, ...result.extractedData }
-          setExtractedData(mergedData)
-          onDataExtracted(mergedData)
-          
-          // Update parent with conversation
-          onConversationUpdate(
-            updatedConversation.map((msg) => `${msg.type}: ${msg.content}`)
-          )
+          // Check if AI response is not a repeat
+          if (!isRepeatedResponse(result.aiResponse)) {
+            const aiMessage: ConversationMessage = {
+              type: "assistant",
+              content: result.aiResponse,
+              timestamp: new Date(),
+            }
 
-          // Play AI response
-          setStatus("speaking")
-          setIsPlaying(true)
-          await convertTextToSpeech(result.aiResponse)
-          setIsPlaying(false)
+            // Update conversation atomically
+            const updatedConversation = [...conversation, userMessage, aiMessage]
+            setConversation(updatedConversation)
+            
+            // Update extracted data
+            const mergedData = { ...extractedData, ...result.extractedData }
+            setExtractedData(mergedData)
+            onDataExtracted(mergedData)
+            
+            // Update parent
+            onConversationUpdate(
+              updatedConversation.map((msg) => `${msg.type}: ${msg.content}`)
+            )
 
-          // Continue listening if not complete
-          if (!isAllDataCollected(mergedData)) {
-            setTimeout(() => startListening(), 500)
-          } else {
-            setStatus("complete")
+            // Play AI response
+            setStatus("speaking")
+            setIsPlaying(true)
+            await convertTextToSpeech(result.aiResponse)
+            setIsPlaying(false)
+
+            if (!isAllDataCollected(mergedData)) {
+              setTimeout(() => startListening(), 500)
+            } else {
+              setStatus("complete")
+            }
           }
         } else {
-          // If response would be repeated, just continue listening
-          console.log("Prevented repeated response")
+          console.log("Prevented duplicate transcription")
           setTimeout(() => startListening(), 500)
         }
       } else {
