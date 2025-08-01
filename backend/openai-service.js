@@ -6,6 +6,9 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
+// Track last question asked per session
+const sessionQuestions = new Map();
+
 // System prompt for retirement data collection
 const CONVERSATION_SYSTEM_PROMPT = `You are Mark, a friendly and professional retirement planning specialist. Your goal is to collect three specific pieces of information from the user:
 
@@ -13,46 +16,42 @@ const CONVERSATION_SYSTEM_PROMPT = `You are Mark, a friendly and professional re
 2. Retirement date (when they want to retire)
 3. Current retirement savings amount
 
-IMPORTANT RULES:
-1. NEVER repeat the exact same question or response
-2. If user already provided some information, don't ask for it again
-3. Keep responses concise and varied
-4. Acknowledge user's answers before asking the next question
-5. If an answer is unclear, ask for clarification naturally
+CRITICAL RULES:
+1. NEVER repeat yourself or ask the same question twice
+2. NEVER ask for information that was already provided
+3. Keep responses SHORT and FOCUSED - one clear question at a time
+4. Briefly acknowledge what you understood, then ask for the next piece of information
+5. If you don't understand an answer, ask for clarification ONCE, then move on
+6. Do not add unnecessary conversation or small talk
 
 CONVERSATION FLOW:
-1. INTRODUCTION (only if no prior conversation):
+1. FIRST INTERACTION ONLY:
 "Hi there this is Mark, who am I speaking with?"
 
-2. AFTER GETTING NAME (only if starting fresh):
-"Nice to meet you [First name]. I'll help you plan for retirement by asking a few quick questions."
+2. AFTER GETTING NAME (FIRST TIME ONLY):
+"Nice to meet you [Name]. I need three quick pieces of information for your retirement planning."
 
-3. DATA COLLECTION:
-- Ask for missing information one at a time
-- Vary your questions naturally
-- Acknowledge previous answers
-- Use the person's name occasionally
+3. DATA COLLECTION (ONE AT A TIME):
+- Ask for ONE missing piece of information
+- Acknowledge what was provided
+- Move to the next missing piece
+- If an answer is unclear, ask for clarification ONCE
 
-4. CLOSING (only after getting all 3 pieces of information):
-"Perfect! I have all the information I need. Let me show you what I've collected..."
+4. AFTER GETTING ALL INFO:
+"Perfect! I have everything I need: your birth date [DATE], retirement age [AGE], and savings of [AMOUNT]."
 
-EXAMPLE VARIATIONS FOR QUESTIONS:
-Birthday:
-- "What's your birthday?"
-- "Could you tell me your date of birth?"
-- "When were you born?"
+EXAMPLE GOOD RESPONSES:
+- "I see you were born in 1980. When would you like to retire?"
+- "Got it, retiring at 65. How much have you saved for retirement so far?"
+- "I understand you have $250,000 saved. What's your date of birth?"
 
-Retirement Date:
-- "When do you plan to retire?"
-- "At what age would you like to retire?"
-- "What's your target retirement age?"
+EXAMPLE BAD RESPONSES (DON'T DO THESE):
+- Repeating the same question
+- Asking for multiple pieces of information at once
+- Adding unnecessary conversation
+- Not acknowledging received information
 
-Savings:
-- "How much have you saved for retirement so far?"
-- "What's your current retirement savings?"
-- "Could you share your retirement savings amount?"
-
-Remember: Each response should be unique and contextual to the conversation.`;
+Remember: Be direct, clear, and never repeat yourself.`;
 
 // Data extraction prompt for structured output
 const DATA_EXTRACTION_PROMPT = `Analyze the conversation and extract retirement planning data mentioned. 
@@ -71,73 +70,86 @@ For retirementDate, prioritize these formats:
 - If user mentions "in X years": use that format (e.g., "in 5 years")
 - If user mentions specific date: use MM/DD/YYYY format
 
-Only include fields where actual data was provided. Return empty object {} if no data found.
-
-Focus specifically on:
-1. First name (from introduction)
-2. Birthday/Date of birth
-3. Retirement date/age/timing
-4. Amount saved for retirement
-
-Do not extract any other financial information.`;
+Only include fields where actual data was provided. Return empty object {} if no data found.`;
 
 /**
  * Generate conversational AI response that encourages information sharing
  */
-async function generateConversationResponse(userMessage, conversationHistory = [], extractedData = {}) {
+async function generateConversationResponse(userMessage, conversationHistory = [], extractedData = {}, sessionId = null) {
   try {
     // Build conversation context
-    let messages = []
-
-    // If conversation exists but extractedData is empty, something went wrong
-    // Start fresh but don't repeat the greeting
-    if (conversationHistory.length > 0 && Object.keys(extractedData).length === 0) {
-      messages = [
-        { 
-          role: 'system', 
-          content: 'Continue the retirement planning conversation naturally. Do not start over or repeat the greeting.' 
-        }
-      ]
-    } else {
-      messages = [
-        { role: 'system', content: CONVERSATION_SYSTEM_PROMPT }
-      ]
-    }
+    let messages = [
+      { role: 'system', content: CONVERSATION_SYSTEM_PROMPT }
+    ];
 
     // Add conversation history
     conversationHistory.forEach(msg => {
       messages.push({
         role: msg.type === 'user' ? 'user' : 'assistant',
         content: msg.content
-      })
-    })
+      });
+    });
 
     // Add current user message
-    messages.push({ role: 'user', content: userMessage })
+    messages.push({ role: 'user', content: userMessage });
 
-    // Add context about what data we already have
-    if (Object.keys(extractedData).length > 0) {
-      const dataContext = `Current extracted data: ${JSON.stringify(extractedData, null, 2)}`;
-      messages.push({
-        role: 'system',
-        content: `${dataContext}\n\nUse this information to guide the conversation. Only ask for missing data. Vary your questions and responses.`
-      })
-    }
+    // Track missing fields and last question
+    const missingFields = [];
+    if (!extractedData.dateOfBirth) missingFields.push('date of birth');
+    if (!extractedData.retirementDate) missingFields.push('retirement date/age');
+    if (!extractedData.currentRetirementSavings) missingFields.push('current retirement savings');
 
-    // Get AI response with higher temperature for more variation
+    // Get last question asked for this session
+    let lastQuestion = sessionId ? sessionQuestions.get(sessionId) : null;
+
+    // Add context about what data we already have and what was last asked
+    const dataContext = `
+Current data:
+${JSON.stringify(extractedData, null, 2)}
+
+Missing information: ${missingFields.join(', ')}
+${lastQuestion ? `Last question asked was about: ${lastQuestion}` : ''}
+
+STRICT RULES:
+1. If a field is already in "Current data", DO NOT ask for it again
+2. If the last question was about "${lastQuestion}", DO NOT ask about it again unless the answer was unclear
+3. Pick ONE missing field that hasn't been asked about recently
+4. Keep response under 50 words
+5. Must acknowledge any new information before asking next question
+6. If all data is collected, just confirm the information`;
+
+    messages.push({
+      role: 'system',
+      content: dataContext
+    });
+
     const response = await openai.chat.completions.create({
       model: 'gpt-4-turbo-preview',
       messages: messages,
-      max_tokens: 200,
-      temperature: 0.8, // Increased for more variation
-      presence_penalty: 0.6, // Penalize repeating the same content
-      frequency_penalty: 0.6, // Encourage word choice variation
-    })
+      max_tokens: 100, // Even shorter responses
+      temperature: 0.7,
+      presence_penalty: 1.0, // Maximum penalty for repetition
+      frequency_penalty: 1.0, // Maximum penalty for repetition
+    });
 
-    return response.choices[0].message.content
+    const aiResponse = response.choices[0].message.content;
+
+    // Update last question asked based on the response
+    if (sessionId) {
+      let newQuestion = null;
+      if (aiResponse.includes('birth')) newQuestion = 'date of birth';
+      else if (aiResponse.includes('retire')) newQuestion = 'retirement date/age';
+      else if (aiResponse.includes('save') || aiResponse.includes('savings')) newQuestion = 'current retirement savings';
+      
+      if (newQuestion) {
+        sessionQuestions.set(sessionId, newQuestion);
+      }
+    }
+
+    return aiResponse;
   } catch (error) {
-    console.error('Error generating conversation response:', error)
-    throw new Error('Failed to generate AI response')
+    console.error('Error generating conversation response:', error);
+    throw new Error('Failed to generate AI response');
   }
 }
 
@@ -149,7 +161,7 @@ async function extractDataFromConversation(userMessage, conversationHistory = []
     // Combine all conversation text
     const fullConversation = conversationHistory
       .map(msg => `${msg.type}: ${msg.content}`)
-      .join('\n') + `\nuser: ${userMessage}`
+      .join('\n') + `\nuser: ${userMessage}`;
 
     const response = await openai.chat.completions.create({
       model: 'gpt-4-turbo-preview',
@@ -157,18 +169,28 @@ async function extractDataFromConversation(userMessage, conversationHistory = []
         { role: 'system', content: DATA_EXTRACTION_PROMPT },
         { role: 'user', content: fullConversation }
       ],
-      max_tokens: 300,
+      max_tokens: 150,
       temperature: 0.1,
       response_format: { type: "json_object" }
-    })
+    });
 
-    const extractedData = JSON.parse(response.choices[0].message.content)
-    return extractedData
+    const extractedData = JSON.parse(response.choices[0].message.content);
+    return extractedData;
   } catch (error) {
-    console.error('Error extracting data:', error)
-    return {}
+    console.error('Error extracting data:', error);
+    return {};
   }
 }
+
+// Clean up old session data periodically
+setInterval(() => {
+  const now = Date.now();
+  for (const [sessionId, timestamp] of sessionQuestions.entries()) {
+    if (now - timestamp > 30 * 60 * 1000) { // 30 minutes
+      sessionQuestions.delete(sessionId);
+    }
+  }
+}, 5 * 60 * 1000); // Clean every 5 minutes
 
 module.exports = {
   generateConversationResponse,
