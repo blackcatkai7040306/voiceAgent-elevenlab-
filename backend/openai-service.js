@@ -80,10 +80,17 @@ Do not extract any other financial information.`;
  */
 async function generateConversationResponse(userMessage, conversationHistory = [], extractedData = {}) {
   try {
-    // Build conversation context
-    const messages = [
-      { role: 'system', content: CONVERSATION_SYSTEM_PROMPT }
-    ];
+    // Defensive: If history is empty but extractedData is not, do not start from greeting
+    let messages = []
+    if (conversationHistory.length === 0 && Object.keys(extractedData).length > 0) {
+      messages = [
+        { role: 'system', content: 'Continue the retirement data collection conversation. Do not greet again. Only ask for missing data.' }
+      ]
+    } else {
+      messages = [
+        { role: 'system', content: CONVERSATION_SYSTEM_PROMPT }
+      ]
+    }
 
     // Add conversation history
     conversationHistory.forEach(msg => {

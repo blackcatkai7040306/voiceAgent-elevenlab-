@@ -28,7 +28,19 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
 }) => {
   const [isConnected, setIsConnected] = useState<boolean | null>(null)
   const [isProcessing, setIsProcessing] = useState(false)
-  const [conversation, setConversation] = useState<ConversationMessage[]>([])
+  const [conversation, setConversation] = useState<ConversationMessage[]>(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("voiceAgentConversation")
+      if (saved) {
+        try {
+          return JSON.parse(saved)
+        } catch {
+          return []
+        }
+      }
+    }
+    return []
+  })
   const [isPlaying, setIsPlaying] = useState(false)
   const [extractedData, setExtractedData] = useState<ExtractedUserData>({})
   const [currentTranscript, setCurrentTranscript] = useState("")
@@ -51,6 +63,24 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
     const interval = setInterval(checkVoiceConnection, 30000)
     return () => clearInterval(interval)
   }, [])
+
+  // Persist conversation to localStorage on change
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("voiceAgentConversation", JSON.stringify(conversation))
+    }
+  }, [conversation])
+
+  // Clear conversation from localStorage when all data is collected
+  useEffect(() => {
+    if (isAllDataCollected(extractedData)) {
+      setStatus("complete")
+      stopListeningRef.current = true
+      if (typeof window !== "undefined") {
+        localStorage.removeItem("voiceAgentConversation")
+      }
+    }
+  }, [extractedData])
 
   // On connect, play greeting, then start listening
   useEffect(() => {
