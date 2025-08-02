@@ -78,10 +78,29 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
   // Add ref to track audio context
   const audioContextRef = useRef<AudioContext | null>(null);
 
+  // Function to ensure audio context is ready
+  const ensureAudioContext = async () => {
+    try {
+      if (!audioContextRef.current) {
+        audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+      }
+      // Resume context if it's suspended (ignore user gesture requirement)
+      if (audioContextRef.current.state === 'suspended') {
+        await audioContextRef.current.resume();
+      }
+    } catch (error) {
+      console.error("❌ Error ensuring audio context:", error);
+    }
+  };
+
   // Function to ensure audio context is closed
   const cleanupAudio = async () => {
     if (audioContextRef.current) {
-      await audioContextRef.current.close();
+      try {
+        await audioContextRef.current.close();
+      } catch (error) {
+        console.error("❌ Error closing audio context:", error);
+      }
       audioContextRef.current = null;
     }
   };
@@ -92,7 +111,10 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
       console.log("🎙️ Playing response:", text);
       setStatus("speaking");
       setIsPlaying(true);
-      await cleanupAudio(); // Ensure previous audio is cleaned up
+      
+      // Ensure audio context is ready
+      await ensureAudioContext();
+      
       const success = await convertTextToSpeech(text);
       
       if (!success) {
@@ -106,6 +128,8 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
       }
     } finally {
       setIsPlaying(false);
+      await cleanupAudio(); // Clean up after playing
+      
       // Start listening after speaking is done (if not complete)
       if (!isAllDataCollected(extractedData)) {
         console.log("🎤 Transitioning from speaking to listening...");
@@ -225,7 +249,8 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
     }
 
     try {
-      await cleanupAudio(); // Ensure audio context is cleaned up
+      // Ensure clean audio context state
+      await cleanupAudio();
       audioRecorderRef.current = await recordAudio();
       setStatus("listening");
       setCurrentTranscript("Listening...");
