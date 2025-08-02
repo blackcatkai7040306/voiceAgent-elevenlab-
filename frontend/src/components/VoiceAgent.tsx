@@ -104,12 +104,18 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
       if (conversation.length > 0) {
         setStatus("waiting");
       }
-      // Try to continue with listening anyway
-      if (!isAllDataCollected(extractedData)) {
-        setTimeout(() => startListening(), 100);
-      }
     } finally {
       setIsPlaying(false);
+      // Start listening after speaking is done (if not complete)
+      if (!isAllDataCollected(extractedData)) {
+        console.log("🎤 Transitioning from speaking to listening...");
+        // Small delay to ensure audio context is properly cleaned up
+        setTimeout(() => {
+          if (!isAllDataCollected(extractedData)) {
+            startListening();
+          }
+        }, 300);
+      }
     }
   };
 
@@ -197,20 +203,24 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
     }
   };
 
-  // Start listening (recording) ///
+  // Start listening (recording)
   const startListening = async () => {
+    console.log("🎤 Starting listening...");
     if (!hasStarted || stopListeningRef.current || isAllDataCollected(extractedData)) {
+      console.log("❌ Cannot start listening:", { hasStarted, stopListening: stopListeningRef.current, isComplete: isAllDataCollected(extractedData) });
       return;
     }
 
     // Don't start listening if we're still speaking
     if (isPlaying) {
-      setTimeout(() => startListening(), 100); // Reduced delay
+      console.log("🔄 Still speaking, will retry listening...");
+      setTimeout(() => startListening(), 300);
       return;
     }
 
     // Ensure we're not already recording
     if (audioRecorderRef.current?.isRecording()) {
+      console.log("⚠️ Already recording, skipping...");
       return;
     }
 
@@ -233,7 +243,7 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
       setCurrentTranscript("");
       // Try again after a short delay
       if (!stopListeningRef.current && !isAllDataCollected(extractedData)) {
-        setTimeout(() => startListening(), 100); // Reduced delay
+        setTimeout(() => startListening(), 300);
       }
     }
   };
