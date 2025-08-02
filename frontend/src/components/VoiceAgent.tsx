@@ -89,16 +89,27 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
   // Modified convertTextToSpeech wrapper
   const playResponse = async (text: string) => {
     try {
+      console.log("🎙️ Playing response:", text);
       setStatus("speaking");
       setIsPlaying(true);
       await cleanupAudio(); // Ensure previous audio is cleaned up
-      await convertTextToSpeech(text);
+      const success = await convertTextToSpeech(text);
+      
+      if (!success) {
+        throw new Error("Failed to convert text to speech");
+      }
+    } catch (error) {
+      console.error("❌ Error playing response:", error);
+      // Don't set to waiting if we're just starting
+      if (conversation.length > 0) {
+        setStatus("waiting");
+      }
+      // Try to continue with listening anyway
+      if (!isAllDataCollected(extractedData)) {
+        setTimeout(() => startListening(), 100);
+      }
     } finally {
       setIsPlaying(false);
-      // Don't set to waiting, immediately try to start listening
-      if (!isAllDataCollected(extractedData)) {
-        startListening();
-      }
     }
   };
 
@@ -153,10 +164,12 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
   // Start the conversation
   const startConversation = async () => {
     try {
+      console.log("🎙️ Starting conversation...");
       setHasStarted(true);
-      stopListeningRef.current = false; // Reset stop flag
+      stopListeningRef.current = false;
       
       if (conversation.length === 0) {
+        console.log("📣 Playing initial greeting...");
         const initialGreeting = "Hi there this is Mark, who am I speaking with?";
         const greetingMessage: ConversationMessage = {
           type: "assistant",
@@ -168,14 +181,17 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
         
         await playResponse(initialGreeting);
       } else {
-        // Resume from existing conversation
+        console.log("🔄 Resuming existing conversation...");
         if (!isAllDataCollected(extractedData)) {
           await startListening();
         }
       }
     } catch (error) {
       console.error("❌ Error starting conversation:", error);
-      setStatus("waiting");
+      // Only set waiting status if we're not in the initial greeting
+      if (conversation.length > 0) {
+        setStatus("waiting");
+      }
       // Try again after a delay
       setTimeout(startConversation, 1000);
     }
