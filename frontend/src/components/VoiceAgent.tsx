@@ -261,7 +261,7 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
       stopListening: stopListeningRef.current
     });
 
-    if (!hasStarted || stopListeningRef.current || isAllDataCollected(extractedData)) {
+    if (stopListeningRef.current || isAllDataCollected(extractedData)) {
       console.log("❌ Cannot start listening:", { hasStarted, stopListening: stopListeningRef.current, isComplete: isAllDataCollected(extractedData) });
       return;
     }
