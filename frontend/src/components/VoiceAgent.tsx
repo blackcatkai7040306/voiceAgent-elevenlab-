@@ -117,10 +117,11 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
   useEffect(() => {
     if (typeof window !== "undefined") {
       localStorage.clear(); // Clear all localStorage
-      setStatus("waiting");
-      setHasStarted(false);
-      setConversation([]);
-      setExtractedData({});
+      // Don't reset these states on mount
+      // setStatus("waiting");
+      // setHasStarted(false);
+      // setConversation([]);
+      // setExtractedData({});
     }
   }, []);
 
@@ -151,8 +152,8 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
       }
     } catch (error) {
       console.error("❌ Error playing response:", error);
-      // Don't automatically transition on error
-      setStatus("waiting");
+      // Don't change status on error, try to continue
+      await transitionToListening();
     } finally {
       setIsPlaying(false);
     }
@@ -161,17 +162,16 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
   // Helper function to transition to listening state
   const transitionToListening = async () => {
     try {
-      if (!hasStarted) {
-        console.log("❌ Cannot transition to listening: conversation not started");
-        return;
-      }
-      
+      // Remove hasStarted check since we manage it elsewhere
       console.log("🎤 Transitioning to listening state...");
       setStatus("listening");
       await startListening();
     } catch (error) {
       console.error("❌ Error transitioning to listening:", error);
-      setStatus("waiting");
+      // Don't set to waiting, try to maintain the conversation
+      if (!isAllDataCollected(extractedData)) {
+        setTimeout(() => transitionToListening(), 1000);
+      }
     }
   };
 
@@ -253,6 +253,14 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
 
   // Start listening (recording)
   const startListening = async () => {
+    // Log the current state for debugging
+    console.log("🎤 Start listening called with state:", {
+      hasStarted,
+      status,
+      isPlaying,
+      stopListening: stopListeningRef.current
+    });
+
     if (!hasStarted || stopListeningRef.current || isAllDataCollected(extractedData)) {
       console.log("❌ Cannot start listening:", { hasStarted, stopListening: stopListeningRef.current, isComplete: isAllDataCollected(extractedData) });
       return;
@@ -271,7 +279,8 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
       }, 6000);
     } catch (error) {
       console.error("❌ Error starting recording:", error);
-      setStatus("waiting");
+      // Don't change status, try to recover
+      setTimeout(() => startListening(), 1000);
       setCurrentTranscript("");
     }
   };
