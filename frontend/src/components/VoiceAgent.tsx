@@ -136,87 +136,98 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
       setStatus("listening")
       setCurrentTranscript("Listening...")
       
+      // Create and start recording with shorter silence timeout
       audioRecorderRef.current = await recordAudio({ 
-        silenceTimeout: 1500, 
+        silenceTimeout: 1000, // 1 second silence detection
         maxDuration: 10000 
       })
+      
       audioRecorderRef.current.start()
       console.log("Started recording")
       
-      // Auto-stop after silence or max duration
-      stopTimeoutRef.current = setTimeout(async () => {
-        console.log("Recording timeout reached")
+      // Auto-stop after max duration
+      stopTimeoutRef.current = setTimeout(() => {
+        console.log("Max duration reached")
         if (audioRecorderRef.current?.isRecording()) {
-          await stopListening()
+          stopListening().catch(console.error)
         }
       }, 10000)
+
     } catch (error) {
       console.error("Error starting recording:", error)
       setStatus("idle")
       setCurrentTranscript("")
+      // Try again after a short delay
+      setTimeout(() => startListening(), 500)
     }
   }
 
   const stopListening = async () => {
     console.log("Stopping listening, current status:", status)
-    if (!audioRecorderRef.current) {
+    if (!audioRecorderRef.current?.isRecording()) {
       console.log("No active recording to stop")
       return
     }
     
     try {
+      // Set processing state immediately
       setStatus("processing")
-      setCurrentTranscript("Processing...")
+      setCurrentTranscript("Processing your speech...")
       setIsProcessing(true)
 
       console.log("Stopping recording...")
       const audioBlob = await audioRecorderRef.current.stop()
       console.log("Recording stopped, blob size:", audioBlob.size)
       
+      // Clear timeout if it exists
       if (stopTimeoutRef.current) {
         clearTimeout(stopTimeoutRef.current)
+        stopTimeoutRef.current = null
       }
 
-      if (audioBlob.size === 0) {
-        console.log("Empty audio recording, retrying...")
-        setStatus("idle")
-        setTimeout(() => startListening(), 100)
-        return
-      }
+      // Process the audio if we have enough data
+      if (audioBlob.size > 1000) {
+        console.log("Processing voice input...")
+        const result = await processVoiceInput(
+          audioBlob,
+          conversation,
+          extractedData,
+          sessionId.current
+        )
+        console.log("Voice processing result:", result)
 
-      console.log("Processing voice input...")
-      const result = await processVoiceInput(
-        audioBlob,
-        conversation,
-        extractedData,
-        sessionId.current
-      )
-      console.log("Voice processing result:", result)
+        if (result.success && result.transcription.trim()) {
+          console.log("Transcription received:", result.transcription)
+          setCurrentTranscript("")
+          
+          const updatedConversation: ConversationMessage[] = [
+            ...conversation,
+            { type: "user" as const, content: result.transcription, timestamp: new Date() },
+            { type: "assistant" as const, content: result.aiResponse, timestamp: new Date() }
+          ]
+          
+          setConversation(updatedConversation)
+          setExtractedData(prev => ({ ...prev, ...result.extractedData }))
+          onDataExtracted(result.extractedData)
+          onConversationUpdate(updatedConversation.map(m => `${m.type}: ${m.content}`))
 
-      if (result.success && result.transcription.trim()) {
-        setCurrentTranscript("")
-        
-        const updatedConversation: ConversationMessage[] = [
-          ...conversation,
-          { type: "user" as const, content: result.transcription, timestamp: new Date() },
-          { type: "assistant" as const, content: result.aiResponse, timestamp: new Date() }
-        ]
-        
-        setConversation(updatedConversation)
-        setExtractedData(prev => ({ ...prev, ...result.extractedData }))
-        onDataExtracted(result.extractedData)
-        onConversationUpdate(updatedConversation.map(m => `${m.type}: ${m.content}`))
-
-        if (!isAllDataCollected(result.extractedData)) {
-          playResponse(result.aiResponse)
+          if (!isAllDataCollected(result.extractedData)) {
+            playResponse(result.aiResponse)
+          } else {
+            setStatus("complete")
+          }
+          return
         }
-      } else {
-        console.log("No transcription result, retrying...")
-        setStatus("idle")
-        setTimeout(() => startListening(), 100)
       }
+
+      // If we get here, either the recording was too short or processing failed
+      console.log("Recording too short or processing failed, retrying...")
+      setStatus("idle")
+      setTimeout(() => startListening(), 500)
+
     } catch (error) {
       console.error("Error processing voice input:", error)
+      setStatus("idle")
       playResponse("Sorry, I didn't catch that. Could you please repeat?")
     } finally {
       setIsProcessing(false)
