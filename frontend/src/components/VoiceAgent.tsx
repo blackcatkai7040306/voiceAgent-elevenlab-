@@ -82,6 +82,7 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
     if (isProcessingRef.current || audioQueueRef.current.length === 0) return
     
     isProcessingRef.current = true
+    console.log("Starting audio queue processing")
     setStatus("speaking")
     setIsPlaying(true)
     
@@ -90,20 +91,22 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
         const text = audioQueueRef.current.shift()!
         try {
           await convertTextToSpeech(text, sessionId.current)
-          // Wait a bit after speech to ensure it's complete
           await new Promise(resolve => setTimeout(resolve, 1000))
         } catch (error) {
           console.error("Text-to-speech error:", error)
         }
       }
     } finally {
+      console.log("Finished audio queue processing")
       isProcessingRef.current = false
       setIsPlaying(false)
       
-      // Only transition to listening if we're not complete
       if (!isAllDataCollected(extractedData)) {
-        setStatus("idle") // Set to idle first to allow startListening
-        await startListening()
+        console.log("Starting listening after speech")
+        startListening().catch(error => {
+          console.error("Failed to start listening:", error)
+          setStatus("idle")
+        })
       } else {
         setStatus("complete")
       }
@@ -123,11 +126,12 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
 
   // Recording handlers
   const startListening = async () => {
-    if (status !== "idle" || stopListeningRef.current) {
-      console.log("Cannot start listening:", { status, stopListening: stopListeningRef.current })
+    console.log("Attempting to start listening, current status:", status)
+    if (stopListeningRef.current) {
+      console.log("Cannot start listening: recording is stopped")
       return
     }
-    
+
     try {
       setStatus("listening")
       setCurrentTranscript("Listening...")
@@ -137,6 +141,7 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
         maxDuration: 10000 
       })
       audioRecorderRef.current.start()
+      console.log("Started recording")
       
       stopTimeoutRef.current = setTimeout(async () => {
         if (audioRecorderRef.current?.isRecording()) {
