@@ -85,21 +85,28 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
     setStatus("speaking")
     setIsPlaying(true)
     
-    while (audioQueueRef.current.length > 0) {
-      const text = audioQueueRef.current.shift()!
-      try {
-        await convertTextToSpeech(text, sessionId.current)
-      } catch (error) {
-        console.error("Text-to-speech error:", error)
+    try {
+      while (audioQueueRef.current.length > 0) {
+        const text = audioQueueRef.current.shift()!
+        try {
+          await convertTextToSpeech(text, sessionId.current)
+          // Wait a bit after speech to ensure it's complete
+          await new Promise(resolve => setTimeout(resolve, 1000))
+        } catch (error) {
+          console.error("Text-to-speech error:", error)
+        }
       }
-    }
-    
-    isProcessingRef.current = false
-    setStatus("idle")
-    setIsPlaying(false)
-    
-    if (!isAllDataCollected(extractedData)) {
-      await startListening()
+    } finally {
+      isProcessingRef.current = false
+      setIsPlaying(false)
+      
+      // Only transition to listening if we're not complete
+      if (!isAllDataCollected(extractedData)) {
+        setStatus("idle") // Set to idle first to allow startListening
+        await startListening()
+      } else {
+        setStatus("complete")
+      }
     }
   }
 
@@ -116,7 +123,10 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
 
   // Recording handlers
   const startListening = async () => {
-    if (status !== "idle" || stopListeningRef.current) return
+    if (status !== "idle" || stopListeningRef.current) {
+      console.log("Cannot start listening:", { status, stopListening: stopListeningRef.current })
+      return
+    }
     
     try {
       setStatus("listening")
