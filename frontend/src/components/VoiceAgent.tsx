@@ -136,29 +136,54 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
       setStatus("listening")
       setCurrentTranscript("Listening...")
       
-      // Create and start recording with shorter silence timeout
+      // Create and start recording with adjusted settings
       audioRecorderRef.current = await recordAudio({ 
-        silenceTimeout: 1000, // 1 second silence detection
-        maxDuration: 10000 
+        silenceTimeout: 2000, // Increased to 2 seconds for better speech detection
+        maxDuration: 15000,   // Increased to 15 seconds max
+        silenceThreshold: -50 // Adjust silence sensitivity
       })
       
+      let recordingStartTime = Date.now()
+      let hasAudioData = false
+
+      // Monitor recording status
+      const checkAudio = setInterval(() => {
+        if (audioRecorderRef.current?.isRecording()) {
+          const duration = Date.now() - recordingStartTime
+          if (duration > 1000) { // After 1 second of recording
+            hasAudioData = true
+          }
+        }
+      }, 100)
+
       audioRecorderRef.current.start()
-      console.log("Started recording")
+      console.log("Started recording with adjusted settings")
       
       // Auto-stop after max duration
       stopTimeoutRef.current = setTimeout(() => {
-        console.log("Max duration reached")
+        clearInterval(checkAudio)
+        console.log("Max duration reached, stopping recording...")
         if (audioRecorderRef.current?.isRecording()) {
-          stopListening().catch(console.error)
+          stopListening().catch(error => {
+            console.error("Error stopping recording:", error)
+            setStatus("idle")
+          })
         }
-      }, 10000)
+      }, 15000)
+
+      // Set up manual stop after silence
+      setTimeout(async () => {
+        if (audioRecorderRef.current?.isRecording() && hasAudioData) {
+          clearInterval(checkAudio)
+          console.log("Manual stop after sufficient audio...")
+          await stopListening()
+        }
+      }, 5000) // Stop after 5 seconds if we have audio
 
     } catch (error) {
       console.error("Error starting recording:", error)
       setStatus("idle")
       setCurrentTranscript("")
-      // Try again after a short delay
-      setTimeout(() => startListening(), 500)
     }
   }
 
@@ -175,19 +200,13 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
       setCurrentTranscript("Processing your speech...")
       setIsProcessing(true)
 
-      console.log("Stopping recording...")
+      console.log("Stopping recording and getting audio...")
       const audioBlob = await audioRecorderRef.current.stop()
-      console.log("Recording stopped, blob size:", audioBlob.size)
-      
-      // Clear timeout if it exists
-      // if (stopTimeoutRef.current) {
-      //   clearTimeout(stopTimeoutRef.current)
-      //   stopTimeoutRef.current = null
-      // }
+      console.log("Got audio blob, size:", audioBlob.size, "type:", audioBlob.type)
 
       // Process the audio if we have enough data
       if (audioBlob.size > 1000) {
-        console.log("Processing voice input...")
+        console.log("Processing voice input with size:", audioBlob.size)
         const result = await processVoiceInput(
           audioBlob,
           conversation,
@@ -197,7 +216,7 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
         console.log("Voice processing result:", result)
 
         if (result.success && result.transcription.trim()) {
-          console.log("Transcription received:", result.transcription)
+          console.log("Valid transcription received:", result.transcription)
           setCurrentTranscript("")
           
           const updatedConversation: ConversationMessage[] = [
@@ -217,11 +236,15 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
             setStatus("complete")
           }
           return
+        } else {
+          console.log("No valid transcription in result:", result)
         }
+      } else {
+        console.log("Audio blob too small:", audioBlob.size, "bytes")
       }
 
       // If we get here, either the recording was too short or processing failed
-      console.log("Recording too short or processing failed, retrying...")
+      console.log("Recording failed to process, retrying...")
       setStatus("idle")
       setTimeout(() => startListening(), 500)
 
@@ -232,6 +255,10 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
     } finally {
       setIsProcessing(false)
       audioRecorderRef.current = null
+      if (stopTimeoutRef.current) {
+        clearTimeout(stopTimeoutRef.current)
+        stopTimeoutRef.current = null
+      }
     }
   }
 
