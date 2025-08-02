@@ -143,7 +143,9 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
       audioRecorderRef.current.start()
       console.log("Started recording")
       
+      // Auto-stop after silence or max duration
       stopTimeoutRef.current = setTimeout(async () => {
+        console.log("Recording timeout reached")
         if (audioRecorderRef.current?.isRecording()) {
           await stopListening()
         }
@@ -156,27 +158,42 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
   }
 
   const stopListening = async () => {
-    if (!audioRecorderRef.current || status !== "listening") return
+    console.log("Stopping listening, current status:", status)
+    if (!audioRecorderRef.current) {
+      console.log("No active recording to stop")
+      return
+    }
     
     try {
       setStatus("processing")
       setCurrentTranscript("Processing...")
       setIsProcessing(true)
 
+      console.log("Stopping recording...")
       const audioBlob = await audioRecorderRef.current.stop()
+      console.log("Recording stopped, blob size:", audioBlob.size)
       
       if (stopTimeoutRef.current) {
         clearTimeout(stopTimeoutRef.current)
       }
 
+      if (audioBlob.size === 0) {
+        console.log("Empty audio recording, retrying...")
+        setStatus("idle")
+        setTimeout(() => startListening(), 100)
+        return
+      }
+
+      console.log("Processing voice input...")
       const result = await processVoiceInput(
         audioBlob,
         conversation,
         extractedData,
         sessionId.current
       )
+      console.log("Voice processing result:", result)
 
-      if (result.success) {
+      if (result.success && result.transcription.trim()) {
         setCurrentTranscript("")
         
         const updatedConversation: ConversationMessage[] = [
@@ -193,6 +210,10 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
         if (!isAllDataCollected(result.extractedData)) {
           playResponse(result.aiResponse)
         }
+      } else {
+        console.log("No transcription result, retrying...")
+        setStatus("idle")
+        setTimeout(() => startListening(), 100)
       }
     } catch (error) {
       console.error("Error processing voice input:", error)
