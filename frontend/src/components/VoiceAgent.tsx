@@ -78,11 +78,25 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
   // Add ref to track audio context
   const audioContextRef = useRef<AudioContext | null>(null);
 
+  // Function to ensure audio context is ready
+  const ensureAudioContext = async () => {
+    if (!audioContextRef.current) {
+      audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+    }
+    // Resume context if suspended
+    if (audioContextRef.current.state === 'suspended') {
+      await audioContextRef.current.resume();
+    }
+    return audioContextRef.current;
+  };
+
   // Function to ensure audio context is closed
   const cleanupAudio = async () => {
     if (audioContextRef.current) {
-      await audioContextRef.current.close();
-      audioContextRef.current = null;
+      // Don't close the context, just suspend it
+      if (audioContextRef.current.state === 'running') {
+        await audioContextRef.current.suspend();
+      }
     }
   };
 
@@ -92,7 +106,7 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
       console.log("🎙️ Playing response:", text);
       setStatus("speaking");
       setIsPlaying(true);
-      await cleanupAudio(); // Ensure previous audio is cleaned up
+      await ensureAudioContext(); // Ensure audio context is ready
       const success = await convertTextToSpeech(text);
       
       if (!success) {
@@ -106,6 +120,7 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
       }
     } finally {
       setIsPlaying(false);
+      await cleanupAudio(); // Suspend but don't close the context
       // Start listening after speaking is done (if not complete)
       if (!isAllDataCollected(extractedData)) {
         console.log("🎤 Transitioning from speaking to listening...");
@@ -173,6 +188,9 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
       console.log("🎙️ Starting conversation...");
       setHasStarted(true);
       stopListeningRef.current = false;
+      
+      // Initialize audio context on user interaction
+      await ensureAudioContext();
       
       if (conversation.length === 0) {
         console.log("📣 Playing initial greeting...");
