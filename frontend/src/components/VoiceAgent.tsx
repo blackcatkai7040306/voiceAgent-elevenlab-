@@ -103,11 +103,13 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
   const cleanupAudio = async () => {
     if (audioContextRef.current) {
       try {
-        await audioContextRef.current.close();
+        if (audioContextRef.current.state !== 'closed') {
+          await audioContextRef.current.close();
+          audioContextRef.current = null;
+        }
       } catch (error) {
         console.error("❌ Error closing audio context:", error);
       }
-      audioContextRef.current = null;
     }
   };
 
@@ -149,7 +151,8 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
       }
     } catch (error) {
       console.error("❌ Error playing response:", error);
-      await transitionToListening(); // Try to continue the conversation
+      // Don't automatically transition on error
+      setStatus("waiting");
     } finally {
       setIsPlaying(false);
     }
@@ -158,7 +161,11 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
   // Helper function to transition to listening state
   const transitionToListening = async () => {
     try {
-      await cleanupAudio();
+      if (!hasStarted) {
+        console.log("❌ Cannot transition to listening: conversation not started");
+        return;
+      }
+      
       console.log("🎤 Transitioning to listening state...");
       setStatus("listening");
       await startListening();
@@ -174,11 +181,7 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
       try {
         const connected = await testVoiceConnection()
         setIsConnected(connected)
-        
-        // Auto-start conversation if connected and not started
-        if (connected && !hasStarted && !isAllDataCollected(extractedData)) {
-          await startConversation()
-        }
+        // Remove auto-start from here
       } catch (error) {
         console.error("❌ Connection check failed:", error)
         setIsConnected(false)
@@ -187,7 +190,7 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
     checkVoiceConnection()
     const interval = setInterval(checkVoiceConnection, 30000)
     return () => clearInterval(interval)
-  }, [hasStarted, extractedData]) // Add dependencies
+  }, []) // Remove dependencies that caused multiple calls
 
   // Persist session ID and conversation data
   useEffect(() => {
@@ -221,15 +224,16 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
     try {
       console.log("🎙️ Starting new conversation...");
       
+      // Set started state first
+      setHasStarted(true);
+      stopListeningRef.current = false;
+      
       // Initialize audio context during user interaction
       const audioReady = await ensureAudioContext();
       if (!audioReady) {
         throw new Error("Failed to initialize audio context");
       }
 
-      setHasStarted(true);
-      stopListeningRef.current = false;
-      
       const initialGreeting = "Hi there this is Mark, who am I speaking with?";
       const greetingMessage: ConversationMessage = {
         type: "assistant",
@@ -243,7 +247,7 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
     } catch (error) {
       console.error("❌ Error starting conversation:", error);
       setStatus("waiting");
-      setHasStarted(false);
+      // Don't set hasStarted to false on error
     }
   };
 
