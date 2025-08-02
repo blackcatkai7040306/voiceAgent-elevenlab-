@@ -105,6 +105,15 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
     }
   };
 
+  // Clear localStorage on component mount
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("voiceAgentConversation");
+      localStorage.removeItem("voiceAgentData");
+      localStorage.removeItem("voiceAgentSessionId");
+    }
+  }, []);
+
   // Modified convertTextToSpeech wrapper
   const playResponse = async (text: string) => {
     try {
@@ -120,25 +129,27 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
       if (!success) {
         throw new Error("Failed to convert text to speech");
       }
+
+      // Wait a bit to ensure the audio has started playing
+      await new Promise(resolve => setTimeout(resolve, 500));
+
     } catch (error) {
       console.error("❌ Error playing response:", error);
-      // Don't set to waiting if we're just starting
       if (conversation.length > 0) {
         setStatus("waiting");
       }
     } finally {
       setIsPlaying(false);
-      await cleanupAudio(); // Clean up after playing
+      await cleanupAudio();
       
       // Start listening after speaking is done (if not complete)
       if (!isAllDataCollected(extractedData)) {
         console.log("🎤 Transitioning from speaking to listening...");
-        // Small delay to ensure audio context is properly cleaned up
-        setTimeout(() => {
-          if (!isAllDataCollected(extractedData)) {
-            startListening();
-          }
-        }, 300);
+        setStatus("listening"); // Set status before starting to listen
+        await new Promise(resolve => setTimeout(resolve, 300));
+        if (!isAllDataCollected(extractedData)) {
+          await startListening();
+        }
       }
     }
   };
@@ -197,6 +208,7 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
       console.log("🎙️ Starting conversation...");
       setHasStarted(true);
       stopListeningRef.current = false;
+      setStatus("speaking"); // Set initial status
       
       if (conversation.length === 0) {
         console.log("📣 Playing initial greeting...");
@@ -213,16 +225,13 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
       } else {
         console.log("🔄 Resuming existing conversation...");
         if (!isAllDataCollected(extractedData)) {
+          setStatus("listening"); // Set status before starting to listen
           await startListening();
         }
       }
     } catch (error) {
       console.error("❌ Error starting conversation:", error);
-      // Only set waiting status if we're not in the initial greeting
-      if (conversation.length > 0) {
-        setStatus("waiting");
-      }
-      // Try again after a delay
+      setStatus("waiting");
       setTimeout(startConversation, 1000);
     }
   };
@@ -242,14 +251,7 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
       return;
     }
 
-    // Ensure we're not already recording
-    if (audioRecorderRef.current?.isRecording()) {
-      console.log("⚠️ Already recording, skipping...");
-      return;
-    }
-
     try {
-      // Ensure clean audio context state
       await cleanupAudio();
       audioRecorderRef.current = await recordAudio();
       setStatus("listening");
@@ -266,7 +268,6 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
       console.error("❌ Error starting recording:", error);
       setStatus("waiting");
       setCurrentTranscript("");
-      // Try again after a short delay
       if (!stopListeningRef.current && !isAllDataCollected(extractedData)) {
         setTimeout(() => startListening(), 300);
       }
