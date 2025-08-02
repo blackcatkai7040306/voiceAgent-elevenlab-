@@ -82,14 +82,20 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
   const ensureAudioContext = async () => {
     try {
       if (!audioContextRef.current) {
+        console.log("🔊 Creating new AudioContext...");
         audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
       }
-      // Resume context if it's suspended (ignore user gesture requirement)
+      
       if (audioContextRef.current.state === 'suspended') {
+        console.log("🔊 Resuming AudioContext...");
         await audioContextRef.current.resume();
       }
+      
+      console.log("🔊 AudioContext state:", audioContextRef.current.state);
+      return true;
     } catch (error) {
       console.error("❌ Error ensuring audio context:", error);
+      return false;
     }
   };
 
@@ -122,7 +128,12 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
       console.log("🔊 Playing response:", text);
       setStatus("speaking");
       setIsPlaying(true);
-      await ensureAudioContext();
+      
+      // Check audio context state before playing
+      if (audioContextRef.current?.state === 'suspended') {
+        console.log("🔊 Resuming suspended AudioContext...");
+        await audioContextRef.current.resume();
+      }
       
       const success = await convertTextToSpeech(text);
       if (!success) {
@@ -209,6 +220,13 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
   const startConversation = async () => {
     try {
       console.log("🎙️ Starting new conversation...");
+      
+      // Initialize audio context during user interaction
+      const audioReady = await ensureAudioContext();
+      if (!audioReady) {
+        throw new Error("Failed to initialize audio context");
+      }
+
       setHasStarted(true);
       stopListeningRef.current = false;
       
