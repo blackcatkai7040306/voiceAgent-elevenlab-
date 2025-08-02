@@ -105,52 +105,55 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
     }
   };
 
-  // Clear localStorage on component mount
+  // Clear localStorage and reset state on mount
   useEffect(() => {
     if (typeof window !== "undefined") {
-      localStorage.removeItem("voiceAgentConversation");
-      localStorage.removeItem("voiceAgentData");
-      localStorage.removeItem("voiceAgentSessionId");
+      localStorage.clear(); // Clear all localStorage
+      setStatus("waiting");
+      setHasStarted(false);
+      setConversation([]);
+      setExtractedData({});
     }
   }, []);
 
   // Modified convertTextToSpeech wrapper
   const playResponse = async (text: string) => {
     try {
-      console.log("🎙️ Playing response:", text);
+      console.log("🔊 Playing response:", text);
       setStatus("speaking");
       setIsPlaying(true);
-      
-      // Ensure audio context is ready
       await ensureAudioContext();
       
       const success = await convertTextToSpeech(text);
-      
       if (!success) {
         throw new Error("Failed to convert text to speech");
       }
 
-      // Wait a bit to ensure the audio has started playing
-      await new Promise(resolve => setTimeout(resolve, 500));
-
+      // Wait for audio to finish
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      // Only transition to listening if we're not complete
+      if (!isAllDataCollected(extractedData)) {
+        await transitionToListening();
+      }
     } catch (error) {
       console.error("❌ Error playing response:", error);
-      if (conversation.length > 0) {
-        setStatus("waiting");
-      }
+      await transitionToListening(); // Try to continue the conversation
     } finally {
       setIsPlaying(false);
+    }
+  };
+
+  // Helper function to transition to listening state
+  const transitionToListening = async () => {
+    try {
       await cleanupAudio();
-      
-      // Start listening after speaking is done (if not complete)
-      if (!isAllDataCollected(extractedData)) {
-        console.log("🎤 Transitioning from speaking to listening...");
-        setStatus("listening"); // Set status before starting to listen
-        await new Promise(resolve => setTimeout(resolve, 300));
-        if (!isAllDataCollected(extractedData)) {
-          await startListening();
-        }
-      }
+      console.log("🎤 Transitioning to listening state...");
+      setStatus("listening");
+      await startListening();
+    } catch (error) {
+      console.error("❌ Error transitioning to listening:", error);
+      setStatus("waiting");
     }
   };
 
@@ -205,56 +208,36 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
   // Start the conversation
   const startConversation = async () => {
     try {
-      console.log("🎙️ Starting conversation...");
+      console.log("🎙️ Starting new conversation...");
       setHasStarted(true);
       stopListeningRef.current = false;
-      setStatus("speaking"); // Set initial status
       
-      if (conversation.length === 0) {
-        console.log("📣 Playing initial greeting...");
-        const initialGreeting = "Hi there this is Mark, who am I speaking with?";
-        const greetingMessage: ConversationMessage = {
-          type: "assistant",
-          content: initialGreeting,
-          timestamp: new Date(),
-        };
-        setConversation([greetingMessage]);
-        onConversationUpdate([`assistant: ${initialGreeting}`]);
-        
-        await playResponse(initialGreeting);
-      } else {
-        console.log("🔄 Resuming existing conversation...");
-        if (!isAllDataCollected(extractedData)) {
-          setStatus("listening"); // Set status before starting to listen
-          await startListening();
-        }
-      }
+      const initialGreeting = "Hi there this is Mark, who am I speaking with?";
+      const greetingMessage: ConversationMessage = {
+        type: "assistant",
+        content: initialGreeting,
+        timestamp: new Date(),
+      };
+      setConversation([greetingMessage]);
+      onConversationUpdate([`assistant: ${initialGreeting}`]);
+      
+      await playResponse(initialGreeting);
     } catch (error) {
       console.error("❌ Error starting conversation:", error);
       setStatus("waiting");
-      setTimeout(startConversation, 1000);
+      setHasStarted(false);
     }
   };
 
   // Start listening (recording)
   const startListening = async () => {
-    console.log("🎤 Starting listening...");
     if (!hasStarted || stopListeningRef.current || isAllDataCollected(extractedData)) {
       console.log("❌ Cannot start listening:", { hasStarted, stopListening: stopListeningRef.current, isComplete: isAllDataCollected(extractedData) });
       return;
     }
 
-    // Don't start listening if we're still speaking
-    if (isPlaying) {
-      console.log("🔄 Still speaking, will retry listening...");
-      setTimeout(() => startListening(), 300);
-      return;
-    }
-
     try {
-      await cleanupAudio();
       audioRecorderRef.current = await recordAudio();
-      setStatus("listening");
       setCurrentTranscript("Listening...");
       audioRecorderRef.current.start();
       
@@ -268,9 +251,6 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
       console.error("❌ Error starting recording:", error);
       setStatus("waiting");
       setCurrentTranscript("");
-      if (!stopListeningRef.current && !isAllDataCollected(extractedData)) {
-        setTimeout(() => startListening(), 300);
-      }
     }
   };
 
@@ -295,30 +275,24 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
 
       if (result.success && result.transcription.trim()) {
         setCurrentTranscript("");
-        const userMessage: ConversationMessage = {
-          type: "user",
-          content: result.transcription,
-          timestamp: new Date(),
-        };
-        const aiMessage: ConversationMessage = {
-          type: "assistant",
-          content: result.aiResponse,
-          timestamp: new Date(),
-        };
-
-        const updatedConversation = [...conversation, userMessage, aiMessage];
+        
+        // Update conversation with user's message and AI response
+        const updatedConversation: ConversationMessage[] = [
+          ...conversation,
+          { type: "user" as const, content: result.transcription, timestamp: new Date() },
+          { type: "assistant" as const, content: result.aiResponse, timestamp: new Date() }
+        ];
         setConversation(updatedConversation);
+        
+        // Update extracted data
         const mergedData = { ...extractedData, ...result.extractedData };
         setExtractedData(mergedData);
         onDataExtracted(mergedData);
-        onConversationUpdate(
-          updatedConversation.map((msg) => `${msg.type}: ${msg.content}`)
-        );
+        onConversationUpdate(updatedConversation.map(msg => `${msg.type}: ${msg.content}`));
 
         if (isAllDataCollected(mergedData)) {
           setStatus("complete");
         } else {
-          // Play AI response - it will automatically start listening after speaking
           await playResponse(result.aiResponse);
         }
       } else {
@@ -326,19 +300,12 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
       }
     } catch (error) {
       console.error("❌ Error processing voice input:", error);
-      setCurrentTranscript("");
-      
-      if (!isPlaying && !isAllDataCollected(extractedData)) {
+      if (!isAllDataCollected(extractedData)) {
         await playResponse("I'm sorry, I had trouble processing that. Could you please try again?");
       }
     } finally {
       setIsProcessing(false);
       audioRecorderRef.current = null;
-      
-      // If we're not playing audio and not complete, try to start listening
-      if (!isPlaying && !isAllDataCollected(extractedData)) {
-        setTimeout(() => startListening(), 100);
-      }
     }
   };
 
