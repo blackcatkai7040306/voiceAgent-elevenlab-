@@ -139,8 +139,7 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
       // Create and start recording with adjusted settings
       audioRecorderRef.current = await recordAudio({ 
         silenceTimeout: 2000, // Increased to 2 seconds for better speech detection
-        maxDuration: 15000,   // Increased to 15 seconds max
-        silenceThreshold: -50 // Adjust silence sensitivity
+        maxDuration: 15000    // Increased to 15 seconds max
       })
       
       let recordingStartTime = Date.now()
