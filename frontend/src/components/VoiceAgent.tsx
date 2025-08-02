@@ -180,10 +180,10 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
       console.log("Recording stopped, blob size:", audioBlob.size)
       
       // Clear timeout if it exists
-      if (stopTimeoutRef.current) {
-        clearTimeout(stopTimeoutRef.current)
-        stopTimeoutRef.current = null
-      }
+      // if (stopTimeoutRef.current) {
+      //   clearTimeout(stopTimeoutRef.current)
+      //   stopTimeoutRef.current = null
+      // }
 
       // Process the audio if we have enough data
       if (audioBlob.size > 1000) {
