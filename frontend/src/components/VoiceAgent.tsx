@@ -105,13 +105,23 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
   // Test voice service connection on component mount
   useEffect(() => {
     async function checkVoiceConnection() {
-      const connected = await testVoiceConnection()
-      setIsConnected(connected)
+      try {
+        const connected = await testVoiceConnection()
+        setIsConnected(connected)
+        
+        // Auto-start conversation if connected and not started
+        if (connected && !hasStarted && !isAllDataCollected(extractedData)) {
+          await startConversation()
+        }
+      } catch (error) {
+        console.error("❌ Connection check failed:", error)
+        setIsConnected(false)
+      }
     }
     checkVoiceConnection()
     const interval = setInterval(checkVoiceConnection, 30000)
     return () => clearInterval(interval)
-  }, [])
+  }, [hasStarted, extractedData]) // Add dependencies
 
   // Persist session ID and conversation data
   useEffect(() => {
@@ -142,24 +152,32 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
 
   // Start the conversation
   const startConversation = async () => {
-    setHasStarted(true);
-    stopListeningRef.current = false; // Reset stop flag
-    if (conversation.length === 0) {
-      const initialGreeting = "Hi there this is Mark, who am I speaking with?";
-      const greetingMessage: ConversationMessage = {
-        type: "assistant",
-        content: initialGreeting,
-        timestamp: new Date(),
-      };
-      setConversation([greetingMessage]);
-      onConversationUpdate([`assistant: ${initialGreeting}`]);
+    try {
+      setHasStarted(true);
+      stopListeningRef.current = false; // Reset stop flag
       
-      await playResponse(initialGreeting);
-    } else {
-      // Resume from existing conversation
-      if (!isAllDataCollected(extractedData)) {
-        startListening();
+      if (conversation.length === 0) {
+        const initialGreeting = "Hi there this is Mark, who am I speaking with?";
+        const greetingMessage: ConversationMessage = {
+          type: "assistant",
+          content: initialGreeting,
+          timestamp: new Date(),
+        };
+        setConversation([greetingMessage]);
+        onConversationUpdate([`assistant: ${initialGreeting}`]);
+        
+        await playResponse(initialGreeting);
+      } else {
+        // Resume from existing conversation
+        if (!isAllDataCollected(extractedData)) {
+          await startListening();
+        }
       }
+    } catch (error) {
+      console.error("❌ Error starting conversation:", error);
+      setStatus("waiting");
+      // Try again after a delay
+      setTimeout(startConversation, 1000);
     }
   };
 

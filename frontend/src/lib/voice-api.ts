@@ -1,4 +1,4 @@
-const API_BASE_URL = process.env.NEXT_PUBLIC_SERVER_URL
+const API_BASE_URL = process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:3001'
 
 export interface VoiceProcessingResponse {
   success: boolean
