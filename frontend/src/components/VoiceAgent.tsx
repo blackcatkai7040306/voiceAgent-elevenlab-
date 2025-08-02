@@ -33,13 +33,7 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
   const [conversation, setConversation] = useState<ConversationMessage[]>(() => {
     if (typeof window !== "undefined") {
       const saved = localStorage.getItem("voiceAgentConversation")
-      if (saved) {
-        try {
-          return JSON.parse(saved)
-        } catch {
-          return []
-        }
-      }
+      return saved ? JSON.parse(saved) : []
     }
     return []
   })
@@ -47,20 +41,14 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
   const [extractedData, setExtractedData] = useState<ExtractedUserData>(() => {
     if (typeof window !== "undefined") {
       const saved = localStorage.getItem("voiceAgentData")
-      if (saved) {
-        try {
-          return JSON.parse(saved)
-        } catch {
-          return {}
-        }
-      }
+      return saved ? JSON.parse(saved) : {}
     }
     return {}
   })
 
   const [isPlaying, setIsPlaying] = useState(false)
   const [currentTranscript, setCurrentTranscript] = useState("")
-  const [status, setStatus] = useState<"waiting" | "listening" | "processing" | "speaking" | "complete">("waiting")
+  const [status, setStatus] = useState<"idle" | "listening" | "processing" | "speaking" | "complete">("idle")
   const [hasStarted, setHasStarted] = useState(false)
 
   const audioRecorderRef = useRef<{
@@ -75,113 +63,109 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
       : `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
   )
 
-  // Add ref to track audio context
-  const audioContextRef = useRef<AudioContext | null>(null);
+  const audioQueueRef = useRef<string[]>([])
+  const isProcessingRef = useRef(false)
+  const stopTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const audioContextRef = useRef<AudioContext | null>(null)
+  const currentAudioSourceRef = useRef<AudioBufferSourceNode | null>(null)
 
-  // Function to ensure audio context is ready
-  const ensureAudioContext = async () => {
-    try {
-      if (!audioContextRef.current) {
-        console.log("🔊 Creating new AudioContext...");
-        audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
-      }
-      
-      if (audioContextRef.current.state === 'suspended') {
-        console.log("🔊 Resuming AudioContext...");
-        await audioContextRef.current.resume();
-      }
-      
-      console.log("🔊 AudioContext state:", audioContextRef.current.state);
-      return true;
-    } catch (error) {
-      console.error("❌ Error ensuring audio context:", error);
-      return false;
+  const getAudioContext = () => {
+    if (!audioContextRef.current) {
+      audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)()
     }
-  };
+    return audioContextRef.current
+  }
 
-  // Function to ensure audio context is closed
-  const cleanupAudio = async () => {
-    if (audioContextRef.current) {
+  const playAudioBuffer = async (buffer: ArrayBuffer) => {
+    const audioContext = getAudioContext()
+    
+    try {
+      if (audioContext.state === 'suspended') {
+        await audioContext.resume()
+      }
+
+      const decodedData = await audioContext.decodeAudioData(buffer.slice(0))
+      currentAudioSourceRef.current = audioContext.createBufferSource()
+      currentAudioSourceRef.current.buffer = decodedData
+      currentAudioSourceRef.current.connect(audioContext.destination)
+
+      return new Promise<void>((resolve) => {
+        currentAudioSourceRef.current!.onended = () => {
+          currentAudioSourceRef.current = null
+          resolve()
+        }
+        currentAudioSourceRef.current!.start(0)
+      })
+    } catch (error) {
+      console.error("❌ Error playing audio:", error)
+      throw error
+    }
+  }
+
+  const processAudioQueue = async () => {
+    if (isProcessingRef.current || audioQueueRef.current.length === 0) return
+    
+    isProcessingRef.current = true
+    setStatus("speaking")
+    setIsPlaying(true)
+    
+    while (audioQueueRef.current.length > 0) {
+      const text = audioQueueRef.current.shift()!
       try {
-        if (audioContextRef.current.state !== 'closed') {
-          await audioContextRef.current.close();
-          audioContextRef.current = null;
+        const success = await convertTextToSpeech(text, sessionId.current)
+        if (!success) {
+          console.error("Failed to convert text to speech")
         }
       } catch (error) {
-        console.error("❌ Error closing audio context:", error);
+        console.error("Error in text-to-speech:", error)
       }
     }
-  };
+    
+    isProcessingRef.current = false
+    setStatus("idle")
+    setIsPlaying(false)
+    
+    if (!isAllDataCollected(extractedData)) {
+      await transitionToListening()
+    }
+  }
 
-  // Clear localStorage and reset state on mount
+  const queueSpeech = (text: string) => {
+    audioQueueRef.current.push(text)
+    if (!isProcessingRef.current) {
+      processAudioQueue()
+    }
+  }
+
+  const playResponse = (text: string) => {
+    queueSpeech(text)
+  }
+
+  const transitionToListening = async () => {
+    if (status !== "idle" || isAllDataCollected(extractedData)) return
+    
+    try {
+      console.log("🎤 Transitioning to listening state...")
+      setStatus("listening")
+      await startListening()
+    } catch (error) {
+      console.error("❌ Error transitioning to listening:", error)
+      setStatus("idle")
+      setTimeout(() => transitionToListening(), 1000)
+    }
+  }
+
   useEffect(() => {
     if (typeof window !== "undefined") {
-      localStorage.clear(); // Clear all localStorage
-      // Don't reset these states on mount
-      // setStatus("waiting");
-      // setHasStarted(false);
-      // setConversation([]);
-      // setExtractedData({});
+      localStorage.clear()
     }
-  }, []);
+  }, [])
 
-  // Modified convertTextToSpeech wrapper
-  const playResponse = async (text: string) => {
-    try {
-      console.log("🔊 Playing response:", text);
-      setStatus("speaking");
-      setIsPlaying(true);
-      
-      // Check audio context state before playing
-      if (audioContextRef.current?.state === 'suspended') {
-        console.log("🔊 Resuming suspended AudioContext...");
-        await audioContextRef.current.resume();
-      }
-      
-      const success = await convertTextToSpeech(text);
-      if (!success) {
-        throw new Error("Failed to convert text to speech");
-      }
-
-      // Wait for audio to finish
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      // Only transition to listening if we're not complete
-      if (!isAllDataCollected(extractedData)) {
-        await transitionToListening();
-      }
-    } catch (error) {
-      console.error("❌ Error playing response:", error);
-      // Don't change status on error, try to continue
-      await transitionToListening();
-    } finally {
-      setIsPlaying(false);
-    }
-  };
-
-  // Helper function to transition to listening state
-  const transitionToListening = async () => {
-    try {
-      // Remove hasStarted check since we manage it elsewhere
-      console.log("🎤 Transitioning to listening state...");
-      setStatus("listening");
-      await startListening();
-    } catch (error) {
-      console.error("❌ Error transitioning to listening:", error);
-      // Don't set to waiting, try to maintain the conversation
-      if (!isAllDataCollected(extractedData)) {
-        setTimeout(() => transitionToListening(), 1000);
-      }
-    }
-  };
-
-  // Test voice service connection on component mount
   useEffect(() => {
     async function checkVoiceConnection() {
       try {
         const connected = await testVoiceConnection()
         setIsConnected(connected)
-        // Remove auto-start from here
       } catch (error) {
         console.error("❌ Connection check failed:", error)
         setIsConnected(false)
@@ -190,9 +174,8 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
     checkVoiceConnection()
     const interval = setInterval(checkVoiceConnection, 30000)
     return () => clearInterval(interval)
-  }, []) // Remove dependencies that caused multiple calls
+  }, [])
 
-  // Persist session ID and conversation data
   useEffect(() => {
     if (typeof window !== "undefined") {
       localStorage.setItem("voiceAgentSessionId", sessionId.current)
@@ -201,7 +184,6 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
     }
   }, [conversation, extractedData])
 
-  // Clear data when complete
   useEffect(() => {
     if (isAllDataCollected(extractedData)) {
       setStatus("complete")
@@ -214,146 +196,148 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
     }
   }, [extractedData])
 
-  // Helper: check if all required data is collected
   function isAllDataCollected(data: ExtractedUserData) {
     return !!(data.dateOfBirth && data.retirementDate && data.currentRetirementSavings)
   }
 
-  // Start the conversation
   const startConversation = async () => {
+    if (hasStarted) return
+    
     try {
-      console.log("🎙️ Starting new conversation...");
-      
-      // Set started state first
-      setHasStarted(true);
-      stopListeningRef.current = false;
-      
-      // Initialize audio context during user interaction
-      const audioReady = await ensureAudioContext();
-      if (!audioReady) {
-        throw new Error("Failed to initialize audio context");
-      }
+      console.log("🎙️ Starting new conversation...")
+      setHasStarted(true)
+      stopListeningRef.current = false
 
-      const initialGreeting = "Hi there this is Mark, who am I speaking with?";
+      const initialGreeting = "Hi there this is Mark, who am I speaking with?"
       const greetingMessage: ConversationMessage = {
         type: "assistant",
         content: initialGreeting,
         timestamp: new Date(),
-      };
-      setConversation([greetingMessage]);
-      onConversationUpdate([`assistant: ${initialGreeting}`]);
+      }
       
-      await playResponse(initialGreeting);
+      setConversation([greetingMessage])
+      onConversationUpdate([`assistant: ${initialGreeting}`])
+      
+      playResponse(initialGreeting)
     } catch (error) {
-      console.error("❌ Error starting conversation:", error);
-      setStatus("waiting");
-      // Don't set hasStarted to false on error
+      console.error("❌ Error starting conversation:", error)
+      setStatus("idle")
+      setHasStarted(false)
     }
-  };
+  }
 
-  // Start listening (recording)
   const startListening = async () => {
-    // Log the current state for debugging
-    console.log("🎤 Start listening called with state:", {
-      hasStarted,
-      status,
-      isPlaying,
-      stopListening: stopListeningRef.current
-    });
-
-    if (stopListeningRef.current || isAllDataCollected(extractedData)) {
-      console.log("❌ Cannot start listening:", { hasStarted, stopListening: stopListeningRef.current, isComplete: isAllDataCollected(extractedData) });
-      return;
-    }
+    if (status !== "listening" || stopListeningRef.current) return
 
     try {
-      audioRecorderRef.current = await recordAudio();
-      setCurrentTranscript("Listening...");
-      audioRecorderRef.current.start();
+      audioRecorderRef.current = await recordAudio({ silenceTimeout: 1500, maxDuration: 20000 })
+      setCurrentTranscript("Listening...")
+      audioRecorderRef.current.start()
       
-      // Automatically stop after 6 seconds
-      setTimeout(async () => {
+      if (stopTimeoutRef.current) {
+        clearTimeout(stopTimeoutRef.current)
+      }
+      
+      stopTimeoutRef.current = setTimeout(async () => {
         if (audioRecorderRef.current?.isRecording()) {
-          await stopListening();
+          await stopListening()
         }
-      }, 6000);
+      }, 10000)
     } catch (error) {
-      console.error("❌ Error starting recording:", error);
-      // Don't change status, try to recover
-      setTimeout(() => startListening(), 1000);
-      setCurrentTranscript("");
+      console.error("❌ Error starting recording:", error)
+      setCurrentTranscript("")
+      setStatus("idle")
     }
-  };
+  }
 
-  // Stop listening and process audio
   const stopListening = async () => {
-    if (!audioRecorderRef.current) return;
+    if (!audioRecorderRef.current || status !== "listening") return
     
     try {
-      setStatus("processing");
-      setCurrentTranscript("Processing...");
-      setIsProcessing(true);
+      setStatus("processing")
+      setCurrentTranscript("Processing...")
+      setIsProcessing(true)
 
-      const audioBlob = await audioRecorderRef.current.stop();
-      audioRecorderRef.current = null;
+      const audioBlob = await audioRecorderRef.current.stop()
+      audioRecorderRef.current = null
+      
+      if (stopTimeoutRef.current) {
+        clearTimeout(stopTimeoutRef.current)
+        stopTimeoutRef.current = null
+      }
 
       const result = await processVoiceInput(
         audioBlob,
         conversation,
         extractedData,
         sessionId.current
-      );
+      )
 
       if (result.success && result.transcription.trim()) {
-        setCurrentTranscript("");
+        setCurrentTranscript("")
         
-        // Update conversation with user's message and AI response
         const updatedConversation: ConversationMessage[] = [
           ...conversation,
-          { type: "user" as const, content: result.transcription, timestamp: new Date() },
-          { type: "assistant" as const, content: result.aiResponse, timestamp: new Date() }
-        ];
-        setConversation(updatedConversation);
+          { 
+            type: "user", 
+            content: result.transcription, 
+            timestamp: new Date() 
+          },
+          { 
+            type: "assistant", 
+            content: result.aiResponse, 
+            timestamp: new Date() 
+          }
+        ]
         
-        // Update extracted data
-        const mergedData = { ...extractedData, ...result.extractedData };
-        setExtractedData(mergedData);
-        onDataExtracted(mergedData);
-        onConversationUpdate(updatedConversation.map(msg => `${msg.type}: ${msg.content}`));
+        setConversation(updatedConversation)
+        const mergedData = { ...extractedData, ...result.extractedData }
+        setExtractedData(mergedData)
+        onDataExtracted(mergedData)
+        onConversationUpdate(updatedConversation.map(msg => `${msg.type}: ${msg.content}`))
 
-        if (isAllDataCollected(mergedData)) {
-          setStatus("complete");
-        } else {
-          await playResponse(result.aiResponse);
+        if (!isAllDataCollected(mergedData)) {
+          playResponse(result.aiResponse)
         }
       } else {
-        throw new Error(result.error || "Voice processing failed");
+        throw new Error(result.error || "Voice processing failed")
       }
     } catch (error) {
-      console.error("❌ Error processing voice input:", error);
-      if (!isAllDataCollected(extractedData)) {
-        await playResponse("I'm sorry, I had trouble processing that. Could you please try again?");
-      }
+      console.error("❌ Error processing voice input:", error)
+      playResponse("I'm sorry, I didn't catch that. Could you please repeat?")
     } finally {
-      setIsProcessing(false);
-      audioRecorderRef.current = null;
+      setIsProcessing(false)
+      audioRecorderRef.current = null
     }
-  };
+  }
 
-  // Clean up on unmount
+  const cleanupAudio = async () => {
+    if (currentAudioSourceRef.current) {
+      currentAudioSourceRef.current.stop()
+      currentAudioSourceRef.current = null
+    }
+    
+    if (audioContextRef.current) {
+      await audioContextRef.current.close()
+      audioContextRef.current = null
+    }
+  }
+
   useEffect(() => {
     return () => {
-      stopListeningRef.current = true;
+      stopListeningRef.current = true
       if (audioRecorderRef.current?.isRecording()) {
-        audioRecorderRef.current.stop();
+        audioRecorderRef.current.stop().catch(console.error)
       }
-      cleanupAudio();
-    };
-  }, []);
+      if (stopTimeoutRef.current) {
+        clearTimeout(stopTimeoutRef.current)
+      }
+      cleanupAudio()
+    }
+  }, [])
 
   return (
     <div className="space-y-6">
-      {/* Connection Status */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-semibold text-gray-900">
@@ -395,7 +379,6 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
         )}
       </div>
 
-      {/* Start Conversation Button */}
       {!hasStarted && isConnected && !isAllDataCollected(extractedData) && (
         <div className="flex justify-center">
           <button
@@ -408,18 +391,16 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
         </div>
       )}
 
-      {/* Status Indicator */}
       {hasStarted && (
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 flex items-center space-x-4">
           {status === "listening" && <><Mic className="w-8 h-8 text-blue-500 animate-pulse" /><span className="text-blue-700 font-medium">Listening...</span></>}
           {status === "processing" && <><Loader2 className="w-8 h-8 animate-spin text-blue-500" /><span className="text-blue-700 font-medium">Processing...</span></>}
           {status === "speaking" && <><Volume2 className="w-8 h-8 text-green-500 animate-pulse" /><span className="text-green-700 font-medium">Speaking...</span></>}
           {status === "complete" && <><CheckCircle className="w-8 h-8 text-green-500" /><span className="text-green-700 font-medium">All data collected!</span></>}
-          {status === "waiting" && <span className="text-gray-500">Waiting to start...</span>}
+          {status === "idle" && <span className="text-gray-500">Ready to listen...</span>}
         </div>
       )}
 
-      {/* Live Transcript */}
       {currentTranscript && hasStarted && (
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
           <h4 className="text-sm font-medium text-gray-900 mb-2">Status:</h4>
@@ -427,7 +408,6 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
         </div>
       )}
 
-      {/* Conversation History */}
       {conversation.length > 0 && hasStarted && (
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
           <h4 className="text-lg font-semibold text-gray-900 mb-4">Conversation History</h4>
@@ -445,9 +425,6 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
                   <span className="text-sm font-medium text-gray-900">
                     {message.type === "user" ? "You" : "AI Assistant"}
                   </span>
-                  {/* <span className="text-xs text-gray-500">
-                    {message.timestamp.toLocaleTimeString()}
-                  </span> */}
                 </div>
                 <p className="text-gray-700">{message.content}</p>
               </div>

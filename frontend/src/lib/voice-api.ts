@@ -8,10 +8,8 @@ export interface VoiceProcessingResponse {
   error?: string
 }
 
-/**
- * Process voice input by sending audio to backend
- * Backend handles STT, AI processing, and TTS
- */
+let globalAudioContext: AudioContext | null = null
+
 export async function processVoiceInput(
   audioBlob: Blob,
   conversationHistory: any[] = [],
@@ -39,7 +37,6 @@ export async function processVoiceInput(
       throw new Error(errorData.error || `Request failed: ${response.status}`)
     }
 
-    // Get data from headers
     const transcription = decodeURIComponent(
       response.headers.get("X-Transcription") || ""
     )
@@ -52,14 +49,12 @@ export async function processVoiceInput(
       ? JSON.parse(decodeURIComponent(extractedDataHeader))
       : {}
 
-    // Get audio data
     const audioBuffer = await response.arrayBuffer()
 
     console.log("✅ Voice processing successful")
     console.log("📝 Transcription:", transcription)
     console.log("🤖 AI Response:", aiResponse)
 
-    // Play the audio response
     if (audioBuffer.byteLength > 0) {
       await playAudioBuffer(audioBuffer)
     }
@@ -82,9 +77,6 @@ export async function processVoiceInput(
   }
 }
 
-/**
- * Convert text to speech using backend
- */
 export async function convertTextToSpeech(
   text: string,
   sessionId?: string
@@ -124,9 +116,6 @@ export async function convertTextToSpeech(
   }
 }
 
-/**
- * Test connection to voice service
- */
 export async function testVoiceConnection(): Promise<boolean> {
   try {
     console.log("🔍 Testing voice service connection...")
@@ -148,25 +137,33 @@ export async function testVoiceConnection(): Promise<boolean> {
   }
 }
 
-/**
- * Play audio buffer using Web Audio API
- */
 async function playAudioBuffer(audioBuffer: ArrayBuffer): Promise<void> {
   try {
-    const audioContext = new AudioContext()
-    const decodedData = await audioContext.decodeAudioData(audioBuffer)
+    if (!globalAudioContext) {
+      globalAudioContext = new (window.AudioContext || (window as any).webkitAudioContext)()
+    }
+    
+    const audioContext = globalAudioContext
+    
+    if (audioContext.state === 'suspended') {
+      await audioContext.resume()
+    }
 
+    const decodedData = await audioContext.decodeAudioData(audioBuffer)
     const source = audioContext.createBufferSource()
     source.buffer = decodedData
     source.connect(audioContext.destination)
 
     return new Promise((resolve) => {
-      source.onended = () => resolve()
-      source.start()
+      source.onended = () => {
+        source.disconnect()
+        resolve()
+      }
+      source.start(0)
     })
   } catch (error) {
     console.error("❌ Error playing audio:", error)
-    // Fallback: try to create audio element
+    
     try {
       const blob = new Blob([audioBuffer], { type: "audio/mpeg" })
       const url = URL.createObjectURL(blob)
@@ -180,16 +177,16 @@ async function playAudioBuffer(audioBuffer: ArrayBuffer): Promise<void> {
         audio.play()
       })
     } catch (fallbackError) {
-      console.error("❌ Audio fallback also failed:", fallbackError)
+      console.error("❌ Audio fallback failed:", fallbackError)
       throw fallbackError
     }
   }
 }
 
-/**
- * Record audio from microphone
- */
-export async function recordAudio(): Promise<{
+export async function recordAudio(options = { 
+  silenceTimeout: 2000, 
+  maxDuration: 15000 
+}): Promise<{
   start: () => void
   stop: () => Promise<Blob>
   isRecording: () => boolean
@@ -209,7 +206,6 @@ export async function recordAudio(): Promise<{
     let audioChunks: Blob[] = []
     let isRecording = false
 
-    // Determine the best supported audio format
     let mimeType = "audio/webm;codecs=opus"
     if (MediaRecorder.isTypeSupported("audio/webm")) {
       mimeType = "audio/webm"
@@ -229,18 +225,58 @@ export async function recordAudio(): Promise<{
       }
     }
 
+    const audioContext = new AudioContext()
+    const analyser = audioContext.createAnalyser()
+    analyser.fftSize = 1024
+    const bufferLength = analyser.frequencyBinCount
+    const dataArray = new Uint8Array(bufferLength)
+
+    const source = audioContext.createMediaStreamSource(stream)
+    source.connect(analyser)
+
+    let silenceStart = Date.now()
+    let isNoisy = false
+    let vadInterval: NodeJS.Timeout
+
+    const checkVAD = () => {
+      analyser.getByteFrequencyData(dataArray)
+      
+      let sum = 0
+      for (let i = 0; i < bufferLength; i++) {
+        sum += dataArray[i]
+      }
+      const average = sum / bufferLength
+      
+      if (average > 25) {
+        isNoisy = true
+        silenceStart = Date.now()
+      } else if (isNoisy && Date.now() - silenceStart > options.silenceTimeout) {
+        stop().catch(console.error)
+      }
+    }
+
     const start = () => {
       audioChunks = []
       isRecording = true
       mediaRecorder.start()
-      console.log("🎤 Recording started")
+      silenceStart = Date.now()
+      
+      vadInterval = setInterval(checkVAD, 100)
+      
+      setTimeout(() => {
+        if (isRecording) {
+          stop().catch(console.error)
+        }
+      }, options.maxDuration)
     }
 
     const stop = (): Promise<Blob> => {
       return new Promise((resolve) => {
         mediaRecorder.onstop = () => {
           isRecording = false
-          stream.getTracks().forEach((track) => track.stop())
+          clearInterval(vadInterval)
+          stream.getTracks().forEach(track => track.stop())
+          audioContext.close()
 
           const audioBlob = new Blob(audioChunks, { type: mimeType })
           console.log("⏹️ Recording stopped, audio size:", audioBlob.size)
