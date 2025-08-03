@@ -3,14 +3,17 @@
 import { useConversation } from '@elevenlabs/react';
 import { useCallback } from 'react';
 import { io, Socket } from "socket.io-client"
-import { useEffect } from 'react';
-export function Conversation() {
-  
-  useEffect(()=>{
+import { useEffect, useRef, useState } from "react"
 
-    const socket = io("https://autoincome.theretirementpaycheck.com", {
-     transports: ['websocket', " polling"],
-    });
+
+export function Conversation() {
+  const socketRef = useRef<Socket | null>(null)
+  useEffect(()=>{
+    socketRef.current = io("https://autoincome.theretirementpaycheck.com", {
+      transports: ["websocket", "polling"],
+    })
+
+    const socket = socketRef.current
 
      socket.on("connect", () => {
       console.log("Connected to automation server")
