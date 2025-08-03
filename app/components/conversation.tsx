@@ -8,7 +8,11 @@ export function Conversation() {
   
   useEffect(()=>{
 
-    const socket = io('https://autoincome.theretirementpaycheck.com');
+    const socket = io("https://autoincome.theretirementpaycheck.com", {
+     transports: ['websocket'],
+     withCredentials: true
+    });
+
     socket.on('automation-result', (data) => {
       console.log('Received automation result:', data);
       // Handle result in your UI
