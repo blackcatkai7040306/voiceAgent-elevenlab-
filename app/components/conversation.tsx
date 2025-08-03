@@ -2,8 +2,20 @@
 
 import { useConversation } from '@elevenlabs/react';
 import { useCallback } from 'react';
-
+import { io } from 'socket.io-client';
+import { useEffect } from 'react';
 export function Conversation() {
+  
+  useEffect(()=>{
+
+    const socket = io('https://autoincome.theretirementpaycheck.com');
+    socket.on('automation-result', (data) => {
+      console.log('Received automation result:', data);
+      // Handle result in your UI
+    });
+  }, [])
+
+  
   const conversation = useConversation({
     onConnect: () => console.log('Connected'),
     onDisconnect: () => console.log('Disconnected'),
