@@ -2,16 +2,19 @@
 
 import { useConversation } from '@elevenlabs/react';
 import { useCallback } from 'react';
-import { io } from 'socket.io-client';
+import { io, Socket } from "socket.io-client"
 import { useEffect } from 'react';
 export function Conversation() {
   
   useEffect(()=>{
 
     const socket = io("https://autoincome.theretirementpaycheck.com", {
-     transports: ['websocket'],
-     withCredentials: true
+     transports: ['websocket', " polling"],
     });
+
+     socket.on("connect", () => {
+      console.log("Connected to automation server")
+    })
 
     socket.on('automation-result', (data) => {
       console.log('Received automation result:', data);
