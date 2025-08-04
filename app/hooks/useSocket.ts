@@ -2,19 +2,15 @@
 
 import { useEffect, useRef, useState } from "react"
 import { io, Socket } from "socket.io-client"
-import { AutomationResult, isAutomationResult } from "../types/automationResult"
+import { AutomationResultState } from "../types/automationResult"
 
 const SOCKET_URL = "https://autoincome.theretirementpaycheck.com"
 
-/**
- * Custom hook for managing socket connection and automation results
- * Provides real-time communication with the retirement planning automation service
- */
 export const useSocket = () => {
   const socketRef = useRef<Socket | null>(null)
-  const [isConnected, setIsConnected] = useState<boolean>(false)
+  const [isConnected, setIsConnected] = useState(false)
   const [automationResult, setAutomationResult] =
-    useState<AutomationResult | null>(null)
+    useState<AutomationResultState>(null)
   useEffect(() => {
     // Initialize socket connection
     socketRef.current = io(SOCKET_URL, {})
@@ -32,17 +28,12 @@ export const useSocket = () => {
       setIsConnected(false)
     })
 
-    // Automation result handler with type validation
-    socket.on("automation-result", (data: unknown) => {
-      console.log("Automation result received:", data)
+    // Progress update handler
 
-      if (isAutomationResult(data)) {
-        setAutomationResult(data)
-        console.log("✅ Valid automation result processed successfully")
-      } else {
-        console.error("❌ Invalid automation result format:", data)
-        // Optionally set an error state or show notification
-      }
+    socket.on("automation-result", (data) => {
+      console.log("Automation result:", data)
+      setAutomationResult(data)
+      // Handle progress updates in your UI
     })
     // Error handler
     socket.on("connect_error", (error) => {
