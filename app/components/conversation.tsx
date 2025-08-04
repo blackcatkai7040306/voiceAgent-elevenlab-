@@ -9,13 +9,14 @@ import { useEffect, useRef, useState } from "react"
 export function Conversation() {
   const socketRef = useRef<Socket | null>(null)
   useEffect(()=>{
+    if(socketRef.current) return;
     socketRef.current = io("https://autoincome.theretirementpaycheck.com", {
       // transports: ["websocket", "polling"],
     })
 
     const socket = socketRef.current
 
-     socket.on("connect", () => {
+     socket.on("connection", () => {
       console.log("Connected to automation server")
     })
 
