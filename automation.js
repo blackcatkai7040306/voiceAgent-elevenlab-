@@ -110,7 +110,6 @@ async function runAutomation(formData) {
     // ========================================
     // AUTHENTICATION PROCESS
     // ========================================
-    await wait(1000);
 
     try {
       // Look for common login field selectors
@@ -127,7 +126,7 @@ async function runAutomation(formData) {
       let emailInput = null;
       for (const selector of loginSelectors) {
         try {
-          emailInput = await page.waitForSelector(selector, { timeout: 1000 });
+          emailInput = await page.waitForSelector(selector, { timeout: 300 });
           if (emailInput) {
             console.log(`Found email input with selector: ${selector}`);
             break;
@@ -202,11 +201,7 @@ async function runAutomation(formData) {
             console.log('Login submitted, waiting for page to load...');
 
             // Wait for potential redirect or loading
-            try {
-              await page.waitForNavigation({ timeout: 5000, waitUntil: 'networkidle2' });
-            } catch (e) {
-              console.log('No navigation detected, continuing...');
-            }
+       
           } else {
             console.log('Login button not found, trying to submit form');
             await page.keyboard.press('Enter');
@@ -255,7 +250,6 @@ async function runAutomation(formData) {
     // ========================================
     // CLIENT SELECTION & INTERACTION
     // ========================================
-    await wait(1000);
 
     try {
       console.log('Looking for Average, Joe client link...');
@@ -271,7 +265,7 @@ async function runAutomation(formData) {
         }
       });
 
-      await wait(2000);
+      await wait(1000);
       console.log('Average, Joe client link clicked successfully');
 
     } catch (error) {
@@ -279,7 +273,7 @@ async function runAutomation(formData) {
     }
 
     // Wait and click on Profile link
-    await wait(3000);
+    await wait(2000);
 
     try {
       console.log('Looking for Profile link...');
@@ -295,7 +289,7 @@ async function runAutomation(formData) {
         }
       });
 
-      await wait(2000);
+      await wait(1000);
       console.log('Profile link clicked successfully');
 
     } catch (error) {
@@ -761,7 +755,7 @@ async function runAutomation(formData) {
     // ========================================
     // DATA EXTRACTION & RESULTS
     // ========================================
-    await wait(2000);
+    await wait(1000);
 
     try {
       console.log('Extracting Income /mo (Net) value...');

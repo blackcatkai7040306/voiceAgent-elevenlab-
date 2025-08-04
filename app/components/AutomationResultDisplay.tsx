@@ -71,7 +71,7 @@ export function AutomationResultDisplay({
       </div>
 
       {/* Plans Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      {/* <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {planConfig.map((plan) => (
           <div
             key={plan.key}
@@ -90,7 +90,7 @@ export function AutomationResultDisplay({
             </div>
           </div>
         ))}
-      </div>
+      </div> */}
 
       {/* Additional Info */}
       <div className="mt-8 p-4 bg-gray-50 rounded-lg border border-gray-200">
