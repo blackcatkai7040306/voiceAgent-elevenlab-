@@ -6,7 +6,7 @@ import { io, Socket } from "socket.io-client"
 import { useEffect, useRef, useState } from "react"
 import { useSocket } from "../../app/hooks/useSocket";
 export function Conversation() {
-  const {automationResult} =  useSocket();
+  const {automationResult, isConnected} =  useSocket();
   useEffect(()=>{
       console.log("Automation Result:", automationResult);
   }, [automationResult])

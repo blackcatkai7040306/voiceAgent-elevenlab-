@@ -30,8 +30,8 @@ export const useSocket = () => {
 
     // Progress update handler
    
-    socket.on("automation-progress", (data) => {
-      console.log("Automation progress:", data)
+    socket.on("automation-result", (data) => {
+      console.log("Automation result:", data)
       setAutomationResult(data);
       // Handle progress updates in your UI
     }
