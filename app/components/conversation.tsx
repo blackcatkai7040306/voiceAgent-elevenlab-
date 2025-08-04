@@ -4,11 +4,12 @@ import { useConversation } from '@elevenlabs/react';
 import { useCallback } from 'react';
 import { io, Socket } from "socket.io-client"
 import { useEffect, useRef, useState } from "react"
-
-
+import { useSocket } from "../../app/hooks/useSocket";
 export function Conversation() {
+  const {automationResult} =  useSocket();
   useEffect(()=>{
-  }, [])
+      console.log("Automation Result:", automationResult);
+  }, [automationResult])
 
   
   const conversation = useConversation({

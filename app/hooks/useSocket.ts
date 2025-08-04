@@ -8,8 +8,7 @@ const SOCKET_URL = 'https://autoincome.theretirementpaycheck.com'
 export const useSocket = () => {
   const socketRef = useRef<Socket | null>(null)
   const [isConnected, setIsConnected] = useState(false)
-  const [currentStep, setCurrentStep] = useState<string>("")
-
+ const [automationResult, setAutomationResult] = useState(null)
   useEffect(() => {
     // Initialize socket connection
     socketRef.current = io(SOCKET_URL, {
@@ -31,7 +30,12 @@ export const useSocket = () => {
 
     // Progress update handler
    
-
+    socket.on("automation-progress", (data) => {
+      console.log("Automation progress:", data)
+      setAutomationResult(data);
+      // Handle progress updates in your UI
+    }
+    ) 
     // Error handler
     socket.on("connect_error", (error) => {
       console.error("Socket connection error:", error)
@@ -54,7 +58,7 @@ export const useSocket = () => {
 
   return {
     isConnected,
-    currentStep,
+    automationResult,
     reconnect,
     socket: socketRef.current,
   }
