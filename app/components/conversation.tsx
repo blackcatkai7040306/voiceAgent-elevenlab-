@@ -10,7 +10,7 @@ export function Conversation() {
   const socketRef = useRef<Socket | null>(null)
   useEffect(()=>{
     socketRef.current = io("https://autoincome.theretirementpaycheck.com", {
-      transports: ["websocket", "polling"],
+      // transports: ["websocket", "polling"],
     })
 
     const socket = socketRef.current
