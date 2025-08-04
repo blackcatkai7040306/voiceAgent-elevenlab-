@@ -10,7 +10,7 @@ import {
   AutomationResultEmpty,
 } from "./AutomationResultDisplay"
 export function Conversation() {
-  const { automationResult } = useSocket()
+  const { automationResult, isAutoStarted } = useSocket()
   useEffect(() => {
     console.log("Automation Result:", automationResult)
   }, [automationResult])
@@ -97,7 +97,7 @@ export function Conversation() {
         <div>
           {automationResult ? (
             <AutomationResultDisplay data={automationResult} />
-          ) : conversation.status === "connected" ? (
+          ) : conversation.status === "connected" && isAutoStarted ? (
             <AutomationResultLoading />
           ) : (
             <AutomationResultEmpty />

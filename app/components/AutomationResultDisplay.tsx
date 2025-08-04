@@ -16,7 +16,7 @@ export function AutomationResultDisplay({
   const planConfig = [
     {
       key: "plan1" as keyof AutomationResult,
-      title: "Basic Plan",
+      title: "First Plan",
       description: "Starter retirement package",
       bgColor: "bg-blue-50",
       borderColor: "border-blue-200",
@@ -25,7 +25,7 @@ export function AutomationResultDisplay({
     },
     {
       key: "plan2" as keyof AutomationResult,
-      title: "Premium Plan",
+      title: "Second Plan",
       description: "Enhanced retirement solution",
       bgColor: "bg-green-50",
       borderColor: "border-green-200",
@@ -33,8 +33,8 @@ export function AutomationResultDisplay({
       amountColor: "text-green-600",
     },
     {
-      key: "plan3" as keyof AutomationResult,
-      title: "Elite Plan",
+      key: "total" as keyof AutomationResult,
+      title: "Total Plan",
       description: "Comprehensive retirement package",
       bgColor: "bg-purple-50",
       borderColor: "border-purple-200",
