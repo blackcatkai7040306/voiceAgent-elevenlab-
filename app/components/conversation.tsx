@@ -10,7 +10,12 @@ import {
   AutomationResultEmpty,
 } from "./AutomationResultDisplay"
 export function Conversation() {
-  const { automationResult, isAutoStarted } = useSocket()
+  const {
+    automationResult,
+    isAutoStarted,
+    setAutomationResult,
+    setIsAutoStarted,
+  } = useSocket()
   useEffect(() => {
     console.log("Automation Result:", automationResult)
   }, [automationResult])
@@ -40,6 +45,8 @@ export function Conversation() {
 
   const stopConversation = useCallback(async () => {
     await conversation.endSession()
+    setIsAutoStarted(false)
+    setAutomationResult(null)
   }, [conversation])
 
   return (

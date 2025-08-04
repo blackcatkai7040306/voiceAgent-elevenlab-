@@ -65,6 +65,8 @@ export const useSocket = () => {
 
   return {
     isConnected,
+    setAutomationResult,
+    setIsAutoStarted,
     automationResult,
     isAutoStarted,
     reconnect,
