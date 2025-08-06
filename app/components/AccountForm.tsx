@@ -9,21 +9,21 @@ import axios from 'axios'
 export const AccountForm: React.FC = () => {
   // State to manage all form fields
   const [formData, setFormData] = useState({
-    receive_firm1: "",
-    primary_ssn1: "",
-    account_number1: "",
-    secondary_ssn1: "",
+    step1_receive_firm: "",
+    step1_primary_ssn: "",
+    step1_account_number: "",
+    step1_secondary_ssn: "",
     account_type1: "",
-    clearing_number2: "",
-    account_number2: "",
-    firm_name2: "",
-    account_title2: "",
-    contact_name2: "",
-    firm_address2: "",
-    city2: "",
-    state2: "",
-    telephone_number2: "",
-    zipcode2: "",
+    step2_clearing_number: "",
+    step2_account_number: "",
+    step2_firm_name: "",
+    step2_account_title: "",
+    step2_contact_name: "",
+    step2_firm_address: "",
+    step2_city: "",
+    step2_state: "",
+    step2_telephone_number: "",
+    step2_zipcode: "",
   })
 
   /**
@@ -43,21 +43,21 @@ export const AccountForm: React.FC = () => {
    */
   const fillForm = () => {
     setFormData({
-      receive_firm1: "John",
-      primary_ssn1: "Doe",
-      account_number1: "john.doe@example.com",
-      secondary_ssn1: "+1-555-0123",
+      step1_receive_firm: "John",
+      step1_primary_ssn: "Doe",
+      step1_account_number: "john.doe@example.com",
+      step1_secondary_ssn: "+1-555-0123",
       account_type1: "1990-01-15",
-      clearing_number2: "male",
-      account_number2: "123 Main Street, Apt 4B",
-      firm_name2: "New York",
-      account_title2: "New York",
-      contact_name2: "10001",
-      firm_address2: "United States",
-      city2: "Software Engineer",
-      state2: "Tech Corp Inc.",
-      telephone_number2: "85000",
-      zipcode2: "english",
+      step2_clearing_number: "male",
+      step2_account_number: "123 Main Street, Apt 4B",
+      step2_firm_name: "New York",
+      step2_account_title: "New York",
+      step2_contact_name: "10001",
+      step2_firm_address: "United States",
+      step2_city: "Software Engineer",
+      step2_state: "Tech Corp Inc.",
+      step2_telephone_number: "85000",
+      step2_zipcode: "english",
     })
   }
 
@@ -68,7 +68,7 @@ export const AccountForm: React.FC = () => {
     e.preventDefault()
     console.log("Form submitted:", formData)
     axios.post('https://autoincome.theretirementpaycheck.com/fill-form', formData);
-    
+
     alert("Account form submitted successfully!")
   }
 
@@ -92,7 +92,7 @@ export const AccountForm: React.FC = () => {
               id="step1_receive_firm"
               key="step1_receive_firm"
               type="text"
-              value={formData.receive_firm1}
+              value={formData.step1_receive_firm}
               onChange={(e) => handleInputChange("step1_receive_firm", e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               required
@@ -111,7 +111,7 @@ export const AccountForm: React.FC = () => {
               id="step1_account_number"
               key="step1_account_number"
               type="text"
-              value={formData.account_number1}
+              value={formData.step1_account_number}
               onChange={(e) => handleInputChange("step1_account_number", e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               required
@@ -131,7 +131,7 @@ export const AccountForm: React.FC = () => {
               id="step1_primary_ssn"
               key="step1_primary_ssn"
               type="text"
-              value={formData.primary_ssn1}
+              value={formData.step1_primary_ssn}
               onChange={(e) => handleInputChange("step1_primary_ssn", e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               required
@@ -151,7 +151,7 @@ export const AccountForm: React.FC = () => {
               id="step1_account_number"
               key="step1_account_number"
               type="text"
-              value={formData.account_number1}
+              value={formData.step1_account_number}
               onChange={(e) => handleInputChange("step1_account_number", e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               required
@@ -171,7 +171,7 @@ export const AccountForm: React.FC = () => {
               id="step1_secondary_ssn"
               key="step1_secondary_ssn"
               type="text"
-              value={formData.secondary_ssn1}
+              value={formData.step1_secondary_ssn}
               onChange={(e) => handleInputChange("step1_secondary_ssn", e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               required
@@ -191,7 +191,7 @@ export const AccountForm: React.FC = () => {
               id="step2_clearing_number"
               key="step2_clearing_number"
               type="text"
-              value={formData.clearing_number2}
+              value={formData.step2_clearing_number}
               onChange={(e) => handleInputChange("step2_clearing_number", e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               required
@@ -210,7 +210,7 @@ export const AccountForm: React.FC = () => {
                 id="step2_account_number"
                 key="step2_account_number"
                 type="text"
-                value={formData.account_number2}
+                value={formData.step2_account_number}
                 onChange={(e) => handleInputChange("step2_account_number", e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 required
@@ -229,7 +229,7 @@ export const AccountForm: React.FC = () => {
               id="step2_firm_name"
               key="step2_firm_name"
               type="text"
-              value={formData.firm_name2}
+              value={formData.step2_firm_name}
               onChange={(e) => handleInputChange("step2_firm_name", e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               required
@@ -249,7 +249,7 @@ export const AccountForm: React.FC = () => {
               id="step2_account_title"
               key="step2_account_title"
               type="text"
-              value={formData.account_title2}
+              value={formData.step2_account_title}
               onChange={(e) => handleInputChange("city", e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               required
@@ -269,7 +269,7 @@ export const AccountForm: React.FC = () => {
               id="step2_contact_name"
               key="step2_contact_name"
               type="text"
-              value={formData.contact_name2}
+              value={formData.step2_contact_name}
               onChange={(e) => handleInputChange("step2_contact_name", e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               required
@@ -289,7 +289,7 @@ export const AccountForm: React.FC = () => {
               id="step2_firm_address"
               key="step2_firm_address"
               type="text"
-              value={formData.firm_address2}
+              value={formData.step2_firm_address}
               onChange={(e) => handleInputChange("step2_firm_address", e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               required
@@ -309,7 +309,7 @@ export const AccountForm: React.FC = () => {
               id="step2_city"
               key="step2_city"
               type="text"
-              value={formData.city2}
+              value={formData.step2_city}
               onChange={(e) => handleInputChange("step2_city", e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               placeholder=""
@@ -328,7 +328,7 @@ export const AccountForm: React.FC = () => {
               id="step2_state"
               key="step2_state"
               type="text"
-              value={formData.state2}
+              value={formData.step2_state}
               onChange={(e) => handleInputChange("step2_state", e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               placeholder=""
@@ -347,7 +347,7 @@ export const AccountForm: React.FC = () => {
               id="step2_zipcode"
               key="step2_zipcode"
               type="text"
-              value={formData.zipcode2}
+              value={formData.step2_zipcode}
               onChange={(e) => handleInputChange("step2_zipcode", e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               placeholder=""
@@ -366,7 +366,7 @@ export const AccountForm: React.FC = () => {
               id="step2_telephone_number"
               key="step2_telephone_number"
               type="text"
-              value={formData.telephone_number2}
+              value={formData.step2_telephone_number}
               onChange={(e) => handleInputChange("step2_telephone_number", e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               placeholder=""
@@ -403,21 +403,21 @@ export const AccountForm: React.FC = () => {
             type="button"
             onClick={() =>
               setFormData({
-                receive_firm1: "",
-                primary_ssn1: "",
-                account_number1: "",
-                secondary_ssn1: "",
+                step1_receive_firm: "",
+                step1_primary_ssn: "",
+                step1_account_number: "",
+                step1_secondary_ssn: "",
                 account_type1: "",
-                clearing_number2: "",
-                account_number2: "",
-                firm_name2: "",
-                account_title2: "",
-                contact_name2: "",
-                firm_address2: "",
-                city2: "",
-                state2: "",
-                telephone_number2: "",
-                zipcode2: "",
+                step2_clearing_number: "",
+                step2_account_number: "",
+                step2_firm_name: "",
+                step2_account_title: "",
+                step2_contact_name: "",
+                step2_firm_address: "",
+                step2_city: "",
+                step2_state: "",
+                step2_telephone_number: "",
+                step2_zipcode: "",
               })
             }
             className="w-full sm:w-auto px-6 py-3 bg-gray-600 text-white font-medium rounded-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500 transition-colors duration-200"
