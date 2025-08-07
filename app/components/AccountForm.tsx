@@ -62,12 +62,21 @@ export const AccountForm: React.FC = () => {
   /**
    * Handles form submission
    */
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     console.log("Form submitted:", formData)
-    axios.post('https://autoincome.theretirementpaycheck.com/fill-form', formData);
+    const response = await axios.post('https://autoincome.theretirementpaycheck.com/fill-form', formData,  { responseType: 'blob' });
 
-    alert("Account form submitted successfully!")
+    const url = window.URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }))
+    const link = document.createElement('a')
+    link.href = url
+    link.setAttribute('download', 'filled_form.pdf')
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    window.URL.revokeObjectURL(url)
+    alert("Account form submitted successfully! PDF downloaded.")
+
   }
 
   return (
