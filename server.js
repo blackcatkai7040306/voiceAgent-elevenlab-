@@ -3,10 +3,17 @@ const cors = require('cors');
 const socketIo = require('socket.io');
 const { runAutomation } = require('./automation');
 const app = express();
+const { createClient } = require('@supabase/supabase-js');
 const http = require('http'); // Changed from https to http
+const fs = require('fs');
+const { PDFDocument } = require('pdf-lib');
+const path = require('path');
+const supabaseUrl = 'https://xgiofapasqmxfrxcjydo.supabase.co';
+const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhnaW9mYXBhc3FteGZyeGNqeWRvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ0MDEzMjgsImV4cCI6MjA2OTk3NzMyOH0.R08E-WKz6iWVYqfoW1cR8Rv19SjzubQ3f91zq3GONM4';
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 const server = http.createServer(app); 
-
+const socketmap = {};
 const io = socketIo(server, {
   cors: {
     origin: "https://voice-agent-elevenlab.vercel.app",
@@ -16,6 +23,12 @@ const io = socketIo(server, {
 
 io.on('connect', (socket) => {
   console.log('Client connected:', socket.id);
+  console.log('Socket map:', socketmap);
+  socket.on('coneversationId', (conversationId) => {  
+    console.log('Received conversationId:', conversationId);
+    socketmap[conversationId] = socket.id;
+    console.log('Socket map updated:', socketmap);
+  });
   
   socket.on('disconnect', () => {
     console.log('Client disconnected:', socket.id);
@@ -58,9 +71,9 @@ app.get('/', (req, res) => {
 
 app.post('/run-automation', async (req, res) => {
     try {
-
-
-    const { savedmoney, retirementdate, birthday } = req.body;
+      
+    const { conversation_id, first_name, last_name,  savedmoney, retirementdate, birthday } = req.body;
+    console.log('Received conversation_id:', conversation_id);
 
     console.log('Received data:', { savedmoney, retirementdate, birthday });
 
@@ -137,6 +150,28 @@ app.post('/run-automation', async (req, res) => {
 
     const result = await runAutomation(formData);
    
+
+
+    const supabaseData = {
+      first_name: first_name,
+      last_name:  last_name,
+      birth: birthDate.toISOString().split('T')[0], // 'YYYY-MM-DD'
+      retirement_date: retireDate.toISOString().split('T')[0], // 'YYYY-MM-DD'
+      savings: parseInt(savedmoney, 10),
+      estimated_paycheck: result.monthlyIncomeNet ? parseInt(result.monthlyIncomeNet.replace(/[^0-9]/g, ''), 10) : null
+    };
+
+     const { data, error: supabaseError } = await supabase
+      .from('ExtractedInfo') // <-- Replace with your actual table name
+      .insert([supabaseData]);
+
+    if (supabaseError) {
+      console.error('Supabase insert error:', supabaseError);
+    } else {
+      console.log('Supabase insert success:', data);
+    }
+
+
     console.log('Automation result:', result);
 
     if(result) {
@@ -144,9 +179,6 @@ app.post('/run-automation', async (req, res) => {
       console.log(result);
       io.emit('automation-result', {
       success: true,
-      plan1: result.plan1,
-      plan2: result.plan2,
-      total: result.plan3,
       monthlyIncomeNet: result.monthlyIncomeNet
     });
     } else {
@@ -157,11 +189,9 @@ app.post('/run-automation', async (req, res) => {
       });
 
     }
+    console.log('------------📊 res.json of Plan values:----------');
     res.json({
       success: true,
-      Segment1: result.plan1,
-      Segment2: result.plan2,
-      Total: result.plan3,
       monthlyIncomeNet: result.monthlyIncomeNet
     });
     
@@ -174,7 +204,49 @@ app.post('/run-automation', async (req, res) => {
   }
 });
 
+app.post('/fill-form', async (req, res) => {
+  try {
+    console.log(req.body);
+    const data = req.body;
 
+    const existingPdfBytes = fs.readFileSync('1.pdf');
+    const pdfDoc = await PDFDocument.load(existingPdfBytes);
+    const form = pdfDoc.getForm();
+
+    Object.keys(data).map(key=>{
+      form.getTextField(key).setText(data[key]);
+    })
+
+    const pdfBytes = await pdfDoc.save();
+
+    const now = new Date();
+    const dateStr = now.toISOString().replace(/[:.]/g, '-'); // e.g., 2025-08-07T14-23-45-123Z
+    const filename = `filled_form-${dateStr}.pdf`;
+
+    const dir = path.join(__dirname, 'filled_form');
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir);
+    }
+
+   
+    const filePath = path.join(dir, filename);
+    fs.writeFileSync(filePath, pdfBytes);
+
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `attachment; filename="${filename}"`,
+      'Content-Length': pdfBytes.length
+    });
+    res.send(pdfBytes);
+
+    // Emit event to notify clients
+  } 
+  catch (error) {
+    console.error('Error in /fill-form:', error);
+    res.status(500).json({ success: false, error: error.message });
+      }
+  } 
+);
 
 server.listen(port, () => {
    
