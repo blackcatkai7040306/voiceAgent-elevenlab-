@@ -48,7 +48,7 @@ export const useSocket = () => {
       console.error("Socket connection error:", error)
       setIsConnected(false)
     })
-
+    
     // Cleanup on unmount
     return () => {
       if (socketRef.current) {

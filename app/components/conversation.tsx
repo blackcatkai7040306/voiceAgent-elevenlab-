@@ -15,6 +15,7 @@ export function Conversation() {
     isAutoStarted,
     setAutomationResult,
     setIsAutoStarted,
+    socket
   } = useSocket()
   useEffect(() => {
     console.log("Automation Result:", automationResult)
@@ -31,6 +32,12 @@ export function Conversation() {
     try {
       // Request microphone permission
       await navigator.mediaDevices.getUserMedia({ audio: true })
+      const conversation_id = conversation.getId();
+
+
+      if (socket) {
+      socket.emit("conversation_id",  conversation_id);
+    }
 
       // Start the conversation with your agent
       await conversation.startSession({
